@@ -138,6 +138,11 @@ function clusterNode(count: number, hasRisk: boolean) {
   const root = document.createElement('button'); root.type = 'button'; root.className = `operation-cluster${hasRisk ? ' risk' : ''}`;
   root.setAttribute('aria-label', `${count} 辆车辆聚合`); root.textContent = String(count); return root;
 }
+function setMarkerLayer(marker: any, zIndex: number) {
+  if (typeof marker?.setzIndex === 'function') marker.setzIndex(zIndex);
+  else if (typeof marker?.setZIndex === 'function') marker.setZIndex(zIndex);
+  else marker?.setOptions?.({ zIndex });
+}
 function groupNode(name: string, count: number, hasRisk: boolean) {
   const root = document.createElement('button'); root.type = 'button'; root.className = `operation-group${hasRisk ? ' risk' : ''}`;
   const shortName = name.replace(/有限公司|股份有限公司|科技|智能|配送/g, '').replace(/[()（）\s]/g, '') || name;
@@ -161,18 +166,25 @@ function renderDashboardPoints() {
     cluster.value = new AMapRef.value.MarkerCluster(map.value, points.map((item) => ({ lnglat: [item.realtimeStatus!.longitude, item.realtimeStatus!.latitude], weight: item.attentionLevel === 'CRITICAL' ? 10 : item.attentionLevel === 'HIGH' ? 5 : 1, point: item })), {
       gridSize: 70, maxZoom: 10, averageCenter: true, clusterByZoomChange: true,
       renderClusterMarker: (context: any) => {
+        const marker = context.marker;
+        if (!marker) return;
         const list = context.clusterData ?? context.data ?? [];
         const hasRisk = list.some((item: any) => ['CRITICAL', 'HIGH'].includes(item.point?.attentionLevel));
-        context.marker.setContent(clusterNode(context.count, hasRisk));
-        context.marker.setOffset(new AMapRef.value.Pixel(-18, -18));
-        context.marker.setZIndex(hasRisk ? 90 : 60);
+        marker.setContent?.(clusterNode(context.count, hasRisk));
+        marker.setOffset?.(new AMapRef.value.Pixel(-18, -18));
+        setMarkerLayer(marker, hasRisk ? 90 : 60);
       },
       renderMarker: (context: any) => {
-        const position = context.marker.getPosition?.();
+        const marker = context.marker;
+        if (!marker) return;
+        const position = marker.getPosition?.();
         const point = context.data?.point ?? points.find((item) => Math.abs(item.realtimeStatus!.longitude - Number(position?.lng ?? position?.getLng?.())) < .000001 && Math.abs(item.realtimeStatus!.latitude - Number(position?.lat ?? position?.getLat?.())) < .000001);
-        if (!point) return; context.marker.setContent(markerNode(point)); context.marker.setOffset(markerOffset()); context.marker.setTitle(point.name);
-        context.marker.setZIndex(point.attentionLevel === 'CRITICAL' ? 110 : point.attentionLevel === 'HIGH' ? 95 : 70);
-        context.marker.on('click', () => selectPoint(point));
+        if (!point) return;
+        marker.setContent?.(markerNode(point));
+        marker.setOffset?.(markerOffset());
+        marker.setTitle?.(point.name);
+        setMarkerLayer(marker, point.attentionLevel === 'CRITICAL' ? 110 : point.attentionLevel === 'HIGH' ? 95 : 70);
+        marker.on?.('click', () => selectPoint(point));
       },
     });
     return;
