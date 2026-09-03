@@ -1,0 +1,1 @@
+The supplied AMap-Web/amap-skills archive did not contain a root LICENSE file. Its amap-jsapi-skill/SKILL.md frontmatter declares license: MIT. Source archive supplied by the user: amap-skills-main.zip.

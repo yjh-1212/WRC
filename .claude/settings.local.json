@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vue-tsc *)",
+      "Bash(npx vite *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:5173/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:3000/api/health)",
+      "Bash(curl -s http://127.0.0.1:8080/api/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" -X POST http://127.0.0.1:8080/api/auth/login -H \"Content-Type: application/json\" -d '{\"username\":\"admin\",\"password\":\"Wrc@2026!\"}')",
+      "Bash(node tests/e2e/cockpit.cjs)",
+      "Bash(node -e \"const fs=require\\('fs'\\);const b=fs.readFileSync\\('test-results/cockpit/cockpit-1920.png'\\);console.log\\('PNG',b.readUInt32BE\\(16\\)+'x'+b.readUInt32BE\\(20\\)\\)\")",
+      "Bash(cp \"d:\\\\项目资料\\\\Code\\\\Wurenche\\\\test-results\\\\cockpit\\\\cockpit-1920.png\" \"C:\\\\Users\\\\Lenovo\\\\AppData\\\\Local\\\\Temp\\\\cockpit-new-1920.png\" && echo copied)",
+      "Bash(node -e \"const fs=require\\('fs'\\);const b=fs.readFileSync\\('test-results/cockpit/cockpit-1920.png'\\);console.log\\('sig',b.subarray\\(0,8\\).toString\\('hex'\\)\\);console.log\\('bitDepth',b[24],'colorType',b[25]\\)\")",
+      "Bash(node \"C:\\\\Users\\\\Lenovo\\\\AppData\\\\Local\\\\Temp\\\\cockpit-layout-check.cjs\")",
+      "Bash(cp \"C:\\\\Users\\\\Lenovo\\\\AppData\\\\Local\\\\Temp\\\\cockpit-layout-check.cjs\" \"d:\\\\项目资料\\\\Code\\\\Wurenche\\\\cockpit-layout-check.tmp.cjs\")",
+      "Bash(node cockpit-layout-check.tmp.cjs)",
+      "Bash(ls \"C:\\\\Users\\\\Lenovo\\\\.claude\\\\projects\\\\d-------Code-Wurenche\\\\memory\\\\\" 2>/dev/null && cat \"C:\\\\Users\\\\Lenovo\\\\.claude\\\\projects\\\\d-------Code-Wurenche\\\\memory\\\\MEMORY.md\" 2>/dev/null)",
+      "Read(//c/Users/Lenovo/.claude/projects/d-------Code-Wurenche/memory\" 2>/dev/null && cat C:UsersLenovo.claudeprojectsd-------Code-WurenchememoryMEMORY.md 2>/dev/**)",
+      "Bash(ls \"C:/Users/Lenovo/.claude/projects/d-------Code-Wurenche/memory/\" && cat \"C:/Users/Lenovo/.claude/projects/d-------Code-Wurenche/memory/MEMORY.md\" 2>/dev/null || echo \"NO MEMORY.md\")",
+      "Read(//c/Users/Lenovo/.claude/projects/d-------Code-Wurenche/memory/**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Lenovo\\AppData\\Local\\Temp"
+    ]
+  }
+}

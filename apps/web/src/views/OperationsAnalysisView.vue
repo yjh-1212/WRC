@@ -1,0 +1,32 @@
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from 'vue';
+import { Activity, BatteryCharging, Gauge, RefreshCw, Route, Truck } from 'lucide-vue-next';
+import gsap from 'gsap';
+import { api } from '../api';
+import AnalyticsChart from '../components/AnalyticsChart.vue';
+import PageHeader from '../components/PageHeader.vue';
+import type { AnalyticsOptions, OperationAnalysis } from '../types';
+
+const loading = ref(false), error = ref('');
+const options = reactive<AnalyticsOptions>({ enterprises: [], organizations: [], vehicles: [], accidents: [] });
+const data = ref<OperationAnalysis | null>(null);
+const today = new Date(), start = new Date(Date.now() - 29 * 86400000);
+const filters = reactive({ dates: [start.toISOString().slice(0, 10), today.toISOString().slice(0, 10)], enterpriseId: '', vehicleId: '' });
+const chartBase = { textStyle: { color: '#52525b', fontFamily: 'Inter, system-ui, sans-serif' }, grid: { left: 44, right: 20, top: 32, bottom: 34 }, tooltip: { trigger: 'axis' }, legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 6 }, xAxis: { type: 'category', axisLine: { lineStyle: { color: '#dfe3e8' } }, axisLabel: { fontSize: 10 } }, yAxis: { type: 'value', splitLine: { lineStyle: { color: '#edf0f2' } }, axisLabel: { fontSize: 10 } } } as const;
+const trendOption = computed(() => ({ ...chartBase, xAxis: { ...chartBase.xAxis, data: data.value?.trend.map(x => x.date.slice(5)) ?? [] }, series: [{ name: '里程 km', type: 'line', smooth: true, symbolSize: 5, data: data.value?.trend.map(x => x.mileage) ?? [], lineStyle: { color: '#315f91', width: 2 }, itemStyle: { color: '#315f91' }, areaStyle: { color: 'rgba(49,95,145,.09)' } }, { name: '运行次数', type: 'bar', yAxisIndex: 0, barMaxWidth: 18, data: data.value?.trend.map(x => x.trips) ?? [], itemStyle: { color: '#9ab2c8', borderRadius: [3, 3, 0, 0] } }] }));
+const rankOption = computed(() => ({ ...chartBase, grid: { left: 118, right: 34, top: 12, bottom: 24 }, xAxis: { type: 'value', splitLine: { lineStyle: { color: '#edf0f2' } } }, yAxis: { type: 'category', inverse: true, data: data.value?.enterprises.slice(0, 8).map(x => x.name) ?? [], axisLabel: { fontSize: 10, width: 96, overflow: 'truncate' } }, series: [{ type: 'bar', barWidth: 14, data: data.value?.enterprises.slice(0, 8).map(x => x.mileage) ?? [], itemStyle: { color: '#527da5', borderRadius: [0, 4, 4, 0] }, label: { show: true, position: 'right', fontSize: 10 } }] }));
+async function load() { loading.value = true; error.value = ''; try { const p = new URLSearchParams({ from: filters.dates[0], to: filters.dates[1] }); if (filters.enterpriseId) p.set('enterpriseId', filters.enterpriseId); if (filters.vehicleId) p.set('vehicleId', filters.vehicleId); data.value = await api<OperationAnalysis>(`/analytics/operations?${p}`); requestAnimationFrame(() => { if (!matchMedia('(prefers-reduced-motion: reduce)').matches) gsap.from('.phase6-metric', { y: 8, opacity: 0, duration: .3, stagger: .035, ease: 'power2.out' }); }); } catch (reason) { error.value = reason instanceof Error ? reason.message : '运行分析加载失败'; } finally { loading.value = false; } }
+onMounted(async () => { Object.assign(options, await api<AnalyticsOptions>('/analytics/options')); await load(); });
+const fmt = (v: number) => new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 }).format(v);
+</script>
+
+<template>
+  <PageHeader title="运行分析" description="按时间、企业与车辆钻取运行规模、效率、能耗和自主运行表现。"><el-button :icon="RefreshCw" :loading="loading" @click="load">刷新</el-button></PageHeader>
+  <section class="phase6-filter"><el-date-picker v-model="filters.dates" type="daterange" value-format="YYYY-MM-DD" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期"/><el-select v-model="filters.enterpriseId" clearable placeholder="全部企业" style="width:210px"><el-option v-for="item in options.enterprises" :key="item.id" :label="item.name" :value="item.id"/></el-select><el-select v-model="filters.vehicleId" clearable filterable placeholder="全部车辆" style="width:190px"><el-option v-for="item in options.vehicles.filter(x=>!filters.enterpriseId||x.enterpriseId===filters.enterpriseId)" :key="item.id" :label="item.name" :value="item.id"/></el-select><el-button type="primary" @click="load">查询</el-button></section>
+  <div v-if="error" class="error-state"><strong>运行分析暂时无法加载</strong><span>{{error}}</span><el-button @click="load">重试</el-button></div>
+  <template v-else-if="data">
+    <section class="phase6-metrics" v-loading="loading"><article class="phase6-metric"><Truck/><span>运行车辆</span><strong>{{data.kpis.vehicles}}</strong><small>辆</small></article><article class="phase6-metric"><Route/><span>累计里程</span><strong>{{fmt(data.kpis.mileage)}}</strong><small>km</small></article><article class="phase6-metric"><Activity/><span>运行次数</span><strong>{{data.kpis.trips}}</strong><small>次</small></article><article class="phase6-metric"><Gauge/><span>运行效率</span><strong>{{fmt(data.kpis.efficiency)}}</strong><small>km/h</small></article><article class="phase6-metric"><BatteryCharging/><span>累计能耗</span><strong>{{fmt(data.kpis.energyUsed)}}</strong><small>kWh</small></article><article class="phase6-metric"><Route/><span>自主运行率</span><strong>{{data.kpis.autonomousRate}}%</strong><small>{{data.kpis.manualTakeovers}} 次接管</small></article></section>
+    <section class="phase6-chart-grid"><article class="phase6-panel"><header><div><strong>运行趋势</strong><span>里程与运行频次的日度变化</span></div></header><AnalyticsChart :option="trendOption" aria-label="每日运行里程与次数趋势图"/></article><article class="phase6-panel"><header><div><strong>企业里程排行</strong><span>当前筛选周期</span></div></header><AnalyticsChart :option="rankOption" aria-label="企业运行里程排行图"/></article></section>
+    <section class="phase6-panel"><header><div><strong>企业运行表现</strong><span>点击筛选条件可继续下钻至单车</span></div><b>{{data.enterprises.length}} 家企业</b></header><el-table :data="data.enterprises" empty-text="当前周期暂无运行记录"><el-table-column label="企业" prop="name" min-width="210"/><el-table-column label="运行次数" prop="trips" width="110"/><el-table-column label="里程 (km)" prop="mileage" width="125" sortable/><el-table-column label="时长 (h)" prop="durationHours" width="115"/><el-table-column label="效率 (km/h)" prop="efficiency" width="135"/><el-table-column label="自主运行率" width="150"><template #default="{row}"><el-progress :percentage="row.autonomousRate" :stroke-width="7"/></template></el-table-column></el-table></section>
+  </template>
+</template>

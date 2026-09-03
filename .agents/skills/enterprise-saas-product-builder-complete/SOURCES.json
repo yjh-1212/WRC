@@ -1,0 +1,264 @@
+{
+  "generated_at_utc": "2026-09-02T08:58:47.536075+00:00",
+  "source_archives": {
+    "anthropic": "skills-main (1).zip",
+    "playwright": "playwright-skill-main.zip",
+    "gsap": "gsap-skills-main.zip",
+    "uiux": "ui-ux-pro-max-skill-main.zip",
+    "ia": "claude-skills-main.zip",
+    "interface": "interface-design-main.zip",
+    "magnus": "agent-skills-main.zip",
+    "dashboard": "skills-main.zip",
+    "storymap": "Product-Manager-Skills-main.zip",
+    "lobehub": "lobehub-canary (1).zip",
+    "amap_jsapi": "amap-skills-main.zip",
+    "amap_agent": "amap-map-agent-skills-main.zip"
+  },
+  "skills": [
+    {
+      "name": "enterprise-saas-product-builder",
+      "type": "local-orchestrator",
+      "source": "local",
+      "files": 3,
+      "bytes": 12885
+    },
+    {
+      "name": "product-design",
+      "type": "requested",
+      "archive": "lobehub-canary (1).zip",
+      "source_path": "lobehub-canary/.agents/skills/product-design",
+      "files": 7,
+      "bytes": 62447
+    },
+    {
+      "name": "user-story-mapping",
+      "type": "requested",
+      "archive": "Product-Manager-Skills-main.zip",
+      "source_path": "Product-Manager-Skills-main/skills/user-story-mapping",
+      "files": 4,
+      "bytes": 18119
+    },
+    {
+      "name": "information-architecture",
+      "type": "requested",
+      "archive": "claude-skills-main.zip",
+      "source_path": "claude-skills-main/skills/information-architecture",
+      "files": 3,
+      "bytes": 26022
+    },
+    {
+      "name": "product-design-and-ux",
+      "type": "requested",
+      "archive": "agent-skills-main.zip",
+      "source_path": "agent-skills-main/product-design-and-ux",
+      "files": 19,
+      "bytes": 53558
+    },
+    {
+      "name": "dashboard-design-system",
+      "type": "requested",
+      "archive": "skills-main.zip",
+      "source_path": "skills-main/dashboard-design-system",
+      "files": 6,
+      "bytes": 11902
+    },
+    {
+      "name": "dashboard-product-design-standard",
+      "type": "requested",
+      "archive": "skills-main.zip",
+      "source_path": "skills-main/dashboard-product-design-standard",
+      "files": 9,
+      "bytes": 53133
+    },
+    {
+      "name": "interface-design",
+      "type": "requested",
+      "archive": "interface-design-main.zip",
+      "source_path": "interface-design-main/.claude/skills/interface-design",
+      "files": 2,
+      "bytes": 29916
+    },
+    {
+      "name": "ui-ux-pro-max",
+      "type": "requested",
+      "archive": "ui-ux-pro-max-skill-main.zip",
+      "source_path": "ui-ux-pro-max-skill-main/.claude/skills/ui-ux-pro-max",
+      "files": 70,
+      "bytes": 3562684
+    },
+    {
+      "name": "frontend-design",
+      "type": "requested",
+      "archive": "skills-main (1).zip",
+      "source_path": "skills-main/skills/frontend-design",
+      "files": 2,
+      "bytes": 18434
+    },
+    {
+      "name": "playwright-skill",
+      "type": "requested",
+      "archive": "playwright-skill-main.zip",
+      "source_path": "playwright-skill-main/skills/playwright-skill",
+      "files": 6,
+      "bytes": 34590
+    },
+    {
+      "name": "ux",
+      "type": "direct-dependency",
+      "archive": "lobehub-canary (1).zip",
+      "source_path": "lobehub-canary/.agents/skills/ux",
+      "files": 7,
+      "bytes": 149464
+    },
+    {
+      "name": "ux-audit",
+      "type": "direct-dependency",
+      "archive": "lobehub-canary (1).zip",
+      "source_path": "lobehub-canary/.agents/skills/ux-audit",
+      "files": 31,
+      "bytes": 348983
+    },
+    {
+      "name": "design-prototype",
+      "type": "direct-dependency",
+      "archive": "lobehub-canary (1).zip",
+      "source_path": "lobehub-canary/.agents/skills/design-prototype",
+      "files": 5,
+      "bytes": 13802
+    },
+    {
+      "name": "product-discovery",
+      "type": "direct-dependency",
+      "archive": "agent-skills-main.zip",
+      "source_path": "agent-skills-main/product-discovery",
+      "files": 16,
+      "bytes": 57638
+    },
+    {
+      "name": "product-methodology",
+      "type": "direct-dependency",
+      "archive": "agent-skills-main.zip",
+      "source_path": "agent-skills-main/product-methodology",
+      "files": 12,
+      "bytes": 54425
+    },
+    {
+      "name": "web-accessibility",
+      "type": "direct-dependency",
+      "archive": "agent-skills-main.zip",
+      "source_path": "agent-skills-main/web-accessibility",
+      "files": 16,
+      "bytes": 33493
+    },
+    {
+      "name": "spec-driven-development",
+      "type": "direct-dependency",
+      "archive": "agent-skills-main.zip",
+      "source_path": "agent-skills-main/spec-driven-development",
+      "files": 18,
+      "bytes": 92613
+    },
+    {
+      "name": "gsap-core",
+      "type": "requested-family",
+      "archive": "gsap-skills-main.zip",
+      "source_path": "gsap-skills-main/skills/gsap-core",
+      "files": 1,
+      "bytes": 14792
+    },
+    {
+      "name": "gsap-frameworks",
+      "type": "requested-family",
+      "archive": "gsap-skills-main.zip",
+      "source_path": "gsap-skills-main/skills/gsap-frameworks",
+      "files": 1,
+      "bytes": 10621
+    },
+    {
+      "name": "gsap-performance",
+      "type": "requested-family",
+      "archive": "gsap-skills-main.zip",
+      "source_path": "gsap-skills-main/skills/gsap-performance",
+      "files": 1,
+      "bytes": 4139
+    },
+    {
+      "name": "gsap-plugins",
+      "type": "requested-family",
+      "archive": "gsap-skills-main.zip",
+      "source_path": "gsap-skills-main/skills/gsap-plugins",
+      "files": 1,
+      "bytes": 21579
+    },
+    {
+      "name": "gsap-react",
+      "type": "requested-family",
+      "archive": "gsap-skills-main.zip",
+      "source_path": "gsap-skills-main/skills/gsap-react",
+      "files": 1,
+      "bytes": 6565
+    },
+    {
+      "name": "gsap-scrolltrigger",
+      "type": "requested-family",
+      "archive": "gsap-skills-main.zip",
+      "source_path": "gsap-skills-main/skills/gsap-scrolltrigger",
+      "files": 1,
+      "bytes": 18390
+    },
+    {
+      "name": "gsap-timeline",
+      "type": "requested-family",
+      "archive": "gsap-skills-main.zip",
+      "source_path": "gsap-skills-main/skills/gsap-timeline",
+      "files": 1,
+      "bytes": 4394
+    },
+    {
+      "name": "gsap-utils",
+      "type": "requested-family",
+      "archive": "gsap-skills-main.zip",
+      "source_path": "gsap-skills-main/skills/gsap-utils",
+      "files": 1,
+      "bytes": 12093
+    },
+    {
+      "name": "amap-design-skill",
+      "type": "local-specialist",
+      "source": "local",
+      "files": 6,
+      "bytes": 13993
+    },
+    {
+      "name": "amap-jsapi-skill",
+      "type": "requested",
+      "source": "amap-skills-main/amap-jsapi-skill",
+      "files": 34,
+      "bytes": 387931,
+      "archive": "amap-skills-main.zip"
+    },
+    {
+      "name": "amap-map-agent-skills",
+      "type": "requested-wrapper",
+      "source": "amap-map-agent-skills-main/skills/amap-map-google-maps-migration",
+      "files": 6,
+      "bytes": 64450,
+      "archive": "amap-map-agent-skills-main.zip"
+    }
+  ],
+  "gsap_installed": [
+    "gsap-core",
+    "gsap-frameworks",
+    "gsap-performance",
+    "gsap-plugins",
+    "gsap-react",
+    "gsap-scrolltrigger",
+    "gsap-timeline",
+    "gsap-utils"
+  ],
+  "local_modifications": [
+    "enterprise-saas-product-builder: map routing + navigation-depth gate",
+    "information-architecture: second-level menu vs tab decision rules",
+    "dashboard-product-design-standard: structural modules are routes, not tabs"
+  ]
+}

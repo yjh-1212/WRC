@@ -1,0 +1,133 @@
+newmtl body_white
+Kd 0.88 0.90 0.93
+Ks 0.85 0.85 0.85
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl cargo_door
+Kd 0.82 0.84 0.87
+Ks 0.70 0.70 0.70
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl lower_dark
+Kd 0.08 0.10 0.13
+Ks 0.25 0.25 0.25
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl front_black
+Kd 0.02 0.03 0.05
+Ks 0.55 0.55 0.55
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl front_white_cap
+Kd 0.88 0.90 0.93
+Ks 0.85 0.85 0.85
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl roof_base
+Kd 0.88 0.90 0.93
+Ks 0.85 0.85 0.85
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl lidar_pedestal
+Kd 0.06 0.08 0.10
+Ks 0.5 0.5 0.5
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl lidar_blue
+Kd 0.00 0.22 0.60
+Ks 0.6 0.6 0.6
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl lidar_cap
+Kd 0.82 0.84 0.87
+Ks 0.65 0.65 0.65
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl camera_pod
+Kd 0.86 0.88 0.90
+Ks 0.75 0.75 0.75
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl sensor_black
+Kd 0.01 0.01 0.015
+Ks 0.4 0.4 0.4
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl antenna_base
+Kd 0.05 0.05 0.06
+Ks 0.3 0.3 0.3
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl antenna
+Kd 0.02 0.02 0.025
+Ks 0.25 0.25 0.25
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl tire
+Kd 0.015 0.015 0.02
+Ks 0.15 0.15 0.15
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl rim
+Kd 0.12 0.13 0.15
+Ks 0.55 0.55 0.55
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl headlight
+Kd 0.75 0.82 0.90
+Ks 0.95 0.95 0.95
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl front_camera
+Kd 0.01 0.02 0.03
+Ks 0.45 0.45 0.45
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl front_lower_camera
+Kd 0.01 0.02 0.03
+Ks 0.45 0.45 0.45
+Ns 96.0
+d 1.0
+illum 2
+
+newmtl side_marker
+Kd 0.95 0.38 0.03
+Ks 0.55 0.35 0.15
+Ns 96.0
+d 1.0
+illum 2
+

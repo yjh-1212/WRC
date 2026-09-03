@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - packages/*
+confirmModulesPurge: false
+nodeExperimentalPackageMap: false
+allowBuilds:
+  '@nestjs/core': true
+  '@prisma/client': true
+  '@prisma/engines': true
+  '@scarf/scarf': false
+  esbuild: true
+  prisma: true
+  unrs-resolver: true
+  vue-demi: true

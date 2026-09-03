@@ -1,0 +1,41 @@
+{
+  "name": "wurenche-regulatory-platform",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.11.0",
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"pnpm --filter api dev\" \"pnpm --filter web dev\"",
+    "build": "pnpm -r build",
+    "test": "pnpm --filter api test",
+    "test:api": "node tests/api/phase7-api.cjs && node tests/api/phase8-dashboard-api.cjs && node tests/api/enterprise-accounts-api.cjs && node tests/api/system-catalog-api.cjs",
+    "test:api:accounts": "node tests/api/enterprise-accounts-api.cjs",
+    "test:api:catalog": "node tests/api/system-catalog-api.cjs",
+    "test:api:phase8": "node tests/api/phase8-dashboard-api.cjs",
+    "test:db": "node tests/database/phase7-db.cjs",
+    "test:e2e": "node tests/run-e2e.cjs",
+    "test:e2e:phase7": "node tests/e2e/phase7.cjs",
+    "test:e2e:phase8": "node tests/e2e/phase8.cjs",
+    "test:e2e:cockpit": "node tests/e2e/cockpit.cjs",
+    "test:e2e:accounts": "node tests/e2e/enterprise-accounts.cjs",
+    "test:e2e:catalog": "node tests/e2e/system-catalog.cjs",
+    "db:generate": "prisma generate --schema prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --name init --schema prisma/schema.prisma",
+    "db:migrate:phase2": "prisma migrate dev --name phase2_archives --schema prisma/schema.prisma",
+    "db:migrate:phase3": "prisma migrate dev --name phase3_admission --schema prisma/schema.prisma",
+    "db:migrate:phase4": "prisma migrate dev --name phase4_operations --schema prisma/schema.prisma",
+    "db:migrate:phase5": "prisma migrate dev --name phase5_safety --schema prisma/schema.prisma",
+    "db:migrate:phase6": "prisma migrate dev --name phase6_analytics --schema prisma/schema.prisma",
+    "db:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:geo": "tsx prisma/fetch-amap-geo.ts",
+    "db:studio": "prisma studio --schema prisma/schema.prisma"
+  },
+  "devDependencies": {
+    "@prisma/client": "6.15.0",
+    "concurrently": "9.2.1",
+    "playwright": "1.62.0",
+    "prisma": "6.15.0",
+    "tsx": "4.20.5",
+    "typescript": "5.9.2"
+  }
+}

@@ -1,0 +1,51 @@
+version: 1
+orchestrator: enterprise-saas-product-builder
+
+skills:
+  product_design:
+    name: product-design
+    required_for: [new_system, major_new_module]
+  story_mapping:
+    name: user-story-mapping
+    required_when: multi_step_operational_flow
+  information_architecture:
+    name: information-architecture
+    required_when: navigation_or_object_organization_changes
+  product_ux:
+    name: product-design-and-ux
+    required_when: behavior_states_recovery_or_interaction_changes
+  dashboard_foundation:
+    name: dashboard-design-system
+    dependency_of: dashboard-product-design-standard
+  dashboard_product:
+    name: dashboard-product-design-standard
+    required_when: enterprise_dashboard_or_admin_surface
+  interface:
+    name: interface-design
+    required_when: visual_hierarchy_layout_or_consistency
+  ui_ux_intelligence:
+    name: ui-ux-pro-max
+    required_when: design_system_palette_typography_chart_or_stack_guidance
+  frontend:
+    name: frontend-design
+    required_when: production_frontend_visual_implementation
+  map_design:
+    name: amap-design-skill
+    required_when: map_geospatial_logistics_corridor_or_tracking_visualization
+  map_implementation:
+    name: amap-jsapi-skill
+    required_when: amap_jsapi_v2_or_amap_map_implementation
+  map_agent_bundle:
+    name: amap-map-agent-skills
+    required_when: google_maps_to_amap_migration
+  motion:
+    pattern: gsap-*
+    optional: true
+    select_by: task_match
+  e2e:
+    name: playwright-skill
+    required_for: [production_critical_flow_verification]
+
+missing_skill_policy:
+  action: block_phase
+  forbid_fallback_summary: true

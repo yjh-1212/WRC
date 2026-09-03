@@ -1,0 +1,1134 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id                      String                   @id @default(cuid())
+  code                    String                   @unique
+  name                    String
+  status                  String                   @default("ACTIVE")
+  parentId                String?
+  parent                  Organization?            @relation("OrganizationTree", fields: [parentId], references: [id])
+  children                Organization[]           @relation("OrganizationTree")
+  users                   User[]
+  enterprises             Enterprise[]
+  vehicles                Vehicle[]
+  licenses                VehicleLicense[]
+  admissionApplications   AdmissionApplication[]
+  operationRecords        OperationRecord[]
+  operationRegions        OperationRegion[]
+  safetyAlerts            SafetyAlert[]
+  electronicFences        ElectronicFence[]
+  accidents               Accident[]
+  violations              Violation[]
+  offlineEvents           OfflineEvent[]
+  emergencyTasks          EmergencyTask[]
+  evaluationIndicators    EvaluationIndicator[]
+  evaluationTasks         EvaluationTask[]
+  enterpriseEvaluations   EnterpriseEvaluation[]
+  evaluationAppeals       EvaluationAppeal[]
+  accidentReconstructions AccidentReconstruction[]
+  regulatoryReports       RegulatoryReport[]
+  deliveryOrders          DeliveryOrder[]
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+
+  @@index([parentId])
+}
+
+model Enterprise {
+  id                      String                    @id @default(cuid())
+  businessNo              String                    @unique
+  name                    String
+  creditCode              String                    @unique
+  type                    String                    @default("OPERATOR")
+  status                  String                    @default("ACTIVE")
+  legalRepresentative     String?
+  contactName             String?
+  contactPhone            String?
+  registeredAddress       String?
+  organizationId          String
+  organization            Organization              @relation(fields: [organizationId], references: [id])
+  users                   User[]
+  vehicles                Vehicle[]
+  licenses                VehicleLicense[]
+  qualifications          EnterpriseQualification[]
+  admissionApplications   AdmissionApplication[]
+  operationRecords        OperationRecord[]
+  operationRegions        OperationRegion[]
+  safetyAlerts            SafetyAlert[]
+  electronicFences        ElectronicFence[]
+  accidents               Accident[]
+  violations              Violation[]
+  offlineEvents           OfflineEvent[]
+  emergencyTasks          EmergencyTask[]
+  enterpriseEvaluations   EnterpriseEvaluation[]
+  evaluationAppeals       EvaluationAppeal[]
+  accidentReconstructions AccidentReconstruction[]
+  regulatoryReports       RegulatoryReport[]
+  deliveryOrders          DeliveryOrder[]
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model Manufacturer {
+  id           String         @id @default(cuid())
+  businessNo   String         @unique
+  name         String         @unique
+  shortName    String?
+  creditCode   String?        @unique
+  contactName  String?
+  contactPhone String?
+  address      String?
+  status       String         @default("ACTIVE")
+  deletedAt    DateTime?
+  models       VehicleModel[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([status, deletedAt])
+}
+
+model VehicleModel {
+  id             String       @id @default(cuid())
+  businessNo     String       @unique
+  modelCode      String       @unique
+  name           String
+  manufacturerId String
+  manufacturer   Manufacturer @relation(fields: [manufacturerId], references: [id])
+  vehicleType    String       @default("DELIVERY")
+  autonomyLevel  String       @default("L4")
+  maxSpeed       Int
+  ratedRange     Int
+  loadCapacity   Int
+  dimensions     String?
+  status         String       @default("ACTIVE")
+  deletedAt      DateTime?
+  vehicles       Vehicle[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([manufacturerId, name])
+  @@index([manufacturerId, status])
+  @@index([status, deletedAt])
+}
+
+model Vehicle {
+  id                  String                        @id @default(cuid())
+  businessNo          String                        @unique
+  vin                 String                        @unique
+  deviceNo            String                        @unique
+  name                String
+  modelId             String
+  model               VehicleModel                  @relation(fields: [modelId], references: [id])
+  enterpriseId        String
+  enterprise          Enterprise                    @relation(fields: [enterpriseId], references: [id])
+  organizationId      String
+  organization        Organization                  @relation(fields: [organizationId], references: [id])
+  color               String?
+  manufactureDate     DateTime?
+  serviceStartDate    DateTime?
+  status              String                        @default("ACTIVE")
+  onlineStatus        String                        @default("OFFLINE")
+  deletedAt           DateTime?
+  licenses            VehicleLicense[]
+  archive             VehicleArchive?
+  applicationVehicles AdmissionApplicationVehicle[]
+  realtimeStatus      VehicleRealtimeStatus?
+  operationRecords    OperationRecord[]
+  trackPoints         VehicleTrackPoint[]
+  operationRegions    OperationRegionVehicle[]
+  onlineDailyMetrics  VehicleOnlineDaily[]
+  safetyAlerts        SafetyAlert[]
+  fenceAssignments    ElectronicFenceVehicle[]
+  fenceTriggers       FenceTrigger[]
+  accidents           Accident[]
+  violations          Violation[]
+  offlineEvents       OfflineEvent[]
+  deliveryOrders      DeliveryOrder[]
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+
+  @@index([enterpriseId, status])
+  @@index([organizationId, status])
+  @@index([modelId])
+  @@index([onlineStatus])
+  @@index([deletedAt])
+}
+
+model VehicleLicense {
+  id                  String                 @id @default(cuid())
+  businessNo          String                 @unique
+  licenseNo           String                 @unique
+  vehicleId           String
+  vehicle             Vehicle                @relation(fields: [vehicleId], references: [id])
+  enterpriseId        String
+  enterprise          Enterprise             @relation(fields: [enterpriseId], references: [id])
+  organizationId      String
+  organization        Organization           @relation(fields: [organizationId], references: [id])
+  issuedAt            DateTime
+  expiresAt           DateTime
+  status              String                 @default("VALID")
+  remark              String?
+  renewalApplications AdmissionApplication[] @relation("RenewalTargetLicense")
+  approvalResults     ApprovalResult[]
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  @@index([vehicleId, status])
+  @@index([enterpriseId, status])
+  @@index([organizationId])
+  @@index([expiresAt])
+}
+
+model VehicleArchive {
+  id              String    @id @default(cuid())
+  archiveNo       String    @unique
+  vehicleId       String    @unique
+  vehicle         Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  registeredAt    DateTime  @default(now())
+  exitedAt        DateTime?
+  lifecycleStatus String    @default("IN_SERVICE")
+  remark          String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([lifecycleStatus])
+}
+
+model EnterpriseQualification {
+  id                String     @id @default(cuid())
+  businessNo        String     @unique
+  enterpriseId      String
+  enterprise        Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  qualificationType String
+  certificateNo     String     @unique
+  issuedBy          String
+  issuedAt          DateTime
+  expiresAt         DateTime
+  status            String     @default("VALID")
+  attachmentUrl     String?
+  deletedAt         DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@index([enterpriseId, status])
+  @@index([expiresAt])
+  @@index([deletedAt])
+}
+
+model User {
+  id                     String                 @id @default(cuid())
+  username               String                 @unique
+  passwordHash           String
+  displayName            String
+  phone                  String?
+  email                  String?
+  status                 String                 @default("ACTIVE")
+  portal                 String                 @default("REGULATORY")
+  organizationId         String?
+  enterpriseId           String?
+  organization           Organization?          @relation(fields: [organizationId], references: [id])
+  enterprise             Enterprise?            @relation(fields: [enterpriseId], references: [id])
+  roles                  UserRole[]
+  refreshTokens          RefreshToken[]
+  loginLogs              LoginLog[]
+  auditLogs              AuditLog[]
+  admissionApplications  AdmissionApplication[] @relation("ApplicationApplicant")
+  handledApprovalTasks   ApprovalTask[]         @relation("TaskHandler")
+  approvalHistories      ApprovalHistory[]      @relation("HistoryActor")
+  assignedSafetyAlerts   SafetyAlert[]          @relation("AlertResponsible")
+  reportedAccidents      Accident[]             @relation("AccidentReporter")
+  assignedEmergencyTasks EmergencyTask[]        @relation("EmergencyAssignee")
+  emergencyTaskLogs      EmergencyTaskLog[]     @relation("EmergencyLogActor")
+  lastLoginAt            DateTime?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  @@index([organizationId])
+  @@index([enterpriseId])
+  @@index([status])
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  name        String
+  description String?
+  portal      String           @default("REGULATORY")
+  status      String           @default("ACTIVE")
+  users       UserRole[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  name        String
+  module      String
+  description String?
+  roles       RolePermission[]
+  menus       Menu[]
+  createdAt   DateTime         @default(now())
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
+
+model Menu {
+  id             String      @id @default(cuid())
+  code           String      @unique
+  name           String
+  path           String
+  icon           String?
+  portal         String
+  orderNo        Int         @default(0)
+  parentId       String?
+  permissionCode String?
+  permission     Permission? @relation(fields: [permissionCode], references: [code])
+  parent         Menu?       @relation("MenuTree", fields: [parentId], references: [id])
+  children       Menu[]      @relation("MenuTree")
+  status         String      @default("ACTIVE")
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([portal, orderNo])
+  @@index([parentId])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model LoginLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  username  String
+  ip        String?
+  userAgent String?
+  success   Boolean
+  message   String?
+  createdAt DateTime @default(now())
+
+  @@index([username, createdAt])
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  roleNames      String?
+  organizationId String?
+  enterpriseId   String?
+  module         String
+  objectType     String
+  objectId       String?
+  action         String
+  result         String
+  ip             String?
+  detail         String?
+  createdAt      DateTime @default(now())
+
+  @@index([module, createdAt])
+  @@index([enterpriseId, createdAt])
+}
+
+model ProcessDefinition {
+  id              String                  @id @default(cuid())
+  businessNo      String                  @unique
+  code            String                  @unique
+  name            String
+  applicationType String
+  version         Int                     @default(1)
+  status          String                  @default("DRAFT")
+  description     String?
+  nodes           ProcessNodeDefinition[]
+  instances       ProcessInstance[]
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@index([applicationType, status])
+}
+
+model ProcessNodeDefinition {
+  id                  String            @id @default(cuid())
+  processDefinitionId String
+  processDefinition   ProcessDefinition @relation(fields: [processDefinitionId], references: [id], onDelete: Cascade)
+  nodeCode            String
+  name                String
+  orderNo             Int
+  approvalRoleCode    String
+  timeLimitHours      Int               @default(48)
+  countersignMode     String            @default("ANY")
+  canReturn           Boolean           @default(true)
+  tasks               ApprovalTask[]
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@unique([processDefinitionId, nodeCode])
+  @@unique([processDefinitionId, orderNo])
+  @@index([approvalRoleCode])
+}
+
+model AdmissionApplication {
+  id                     String                        @id @default(cuid())
+  businessNo             String                        @unique
+  applicationType        String
+  title                  String
+  applicantUserId        String
+  applicantUser          User                          @relation("ApplicationApplicant", fields: [applicantUserId], references: [id])
+  enterpriseId           String?
+  enterprise             Enterprise?                   @relation(fields: [enterpriseId], references: [id])
+  organizationId         String
+  organization           Organization                  @relation(fields: [organizationId], references: [id])
+  status                 String                        @default("DRAFT")
+  currentNodeName        String?
+  submittedAt            DateTime?
+  completedAt            DateTime?
+  enterpriseNameSnapshot String?
+  creditCodeSnapshot     String?
+  legalRepresentative    String?
+  contactName            String?
+  contactPhone           String?
+  registeredAddress      String?
+  operationPlan          String?
+  qualificationSummary   String?
+  roadTestStartAt        DateTime?
+  roadTestEndAt          DateTime?
+  roadTestRoute          String?
+  testPlan               String?
+  safetyMeasures         String?
+  targetLicenseId        String?
+  targetLicense          VehicleLicense?               @relation("RenewalTargetLicense", fields: [targetLicenseId], references: [id])
+  requestedExpiresAt     DateTime?
+  renewalReason          String?
+  vehicles               AdmissionApplicationVehicle[]
+  processInstances       ProcessInstance[]
+  approvalTasks          ApprovalTask[]
+  approvalHistories      ApprovalHistory[]
+  result                 ApprovalResult?
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
+
+  @@index([applicationType, status])
+  @@index([enterpriseId, status])
+  @@index([organizationId, status])
+  @@index([applicantUserId, createdAt])
+}
+
+model AdmissionApplicationVehicle {
+  applicationId String
+  vehicleId     String
+  application   AdmissionApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  vehicle       Vehicle              @relation(fields: [vehicleId], references: [id])
+  createdAt     DateTime             @default(now())
+
+  @@id([applicationId, vehicleId])
+  @@index([vehicleId])
+}
+
+model ProcessInstance {
+  id                  String               @id @default(cuid())
+  businessNo          String               @unique
+  applicationId       String
+  application         AdmissionApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  processDefinitionId String
+  processDefinition   ProcessDefinition    @relation(fields: [processDefinitionId], references: [id])
+  status              String               @default("RUNNING")
+  currentNodeOrder    Int                  @default(1)
+  startedAt           DateTime             @default(now())
+  completedAt         DateTime?
+  tasks               ApprovalTask[]
+  histories           ApprovalHistory[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([applicationId, createdAt])
+  @@index([status, currentNodeOrder])
+}
+
+model ApprovalTask {
+  id                String                @id @default(cuid())
+  businessNo        String                @unique
+  applicationId     String
+  application       AdmissionApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  processInstanceId String
+  processInstance   ProcessInstance       @relation(fields: [processInstanceId], references: [id], onDelete: Cascade)
+  nodeDefinitionId  String
+  nodeDefinition    ProcessNodeDefinition @relation(fields: [nodeDefinitionId], references: [id])
+  assigneeRoleCode  String
+  handlerUserId     String?
+  handlerUser       User?                 @relation("TaskHandler", fields: [handlerUserId], references: [id])
+  status            String                @default("PENDING")
+  dueAt             DateTime
+  handledAt         DateTime?
+  comment           String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@index([assigneeRoleCode, status, dueAt])
+  @@index([applicationId, createdAt])
+  @@index([processInstanceId, status])
+}
+
+model ApprovalHistory {
+  id                String               @id @default(cuid())
+  applicationId     String
+  application       AdmissionApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  processInstanceId String?
+  processInstance   ProcessInstance?     @relation(fields: [processInstanceId], references: [id], onDelete: SetNull)
+  taskId            String?
+  actorUserId       String?
+  actorUser         User?                @relation("HistoryActor", fields: [actorUserId], references: [id])
+  actorName         String
+  action            String
+  fromStatus        String?
+  toStatus          String
+  nodeName          String?
+  comment           String?
+  createdAt         DateTime             @default(now())
+
+  @@index([applicationId, createdAt])
+  @@index([processInstanceId, createdAt])
+}
+
+model ApprovalResult {
+  id               String               @id @default(cuid())
+  businessNo       String               @unique
+  applicationId    String               @unique
+  application      AdmissionApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  resultType       String
+  status           String               @default("VALID")
+  documentNo       String               @unique
+  licenseId        String?
+  license          VehicleLicense?      @relation(fields: [licenseId], references: [id])
+  operationRegions OperationRegion[]
+  issuedAt         DateTime             @default(now())
+  validFrom        DateTime?
+  validTo          DateTime?
+  content          String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([resultType, status])
+  @@index([licenseId])
+}
+
+model VehicleRealtimeStatus {
+  id              String   @id @default(cuid())
+  vehicleId       String   @unique
+  vehicle         Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  longitude       Float
+  latitude        Float
+  speed           Float    @default(0)
+  heading         Float    @default(0)
+  battery         Int
+  drivingState    String   @default("PARKED")
+  autonomousState String   @default("STANDBY")
+  signalStrength  Int      @default(100)
+  mileageToday    Float    @default(0)
+  locationTime    DateTime
+  heartbeatAt     DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([drivingState, heartbeatAt])
+  @@index([heartbeatAt])
+}
+
+model OperationRegion {
+  id               String                   @id @default(cuid())
+  businessNo       String                   @unique
+  name             String
+  regionType       String                   @default("OPERATION")
+  enterpriseId     String?
+  enterprise       Enterprise?              @relation(fields: [enterpriseId], references: [id])
+  organizationId   String
+  organization     Organization             @relation(fields: [organizationId], references: [id])
+  approvalResultId String?
+  approvalResult   ApprovalResult?          @relation(fields: [approvalResultId], references: [id])
+  polygonJson      String
+  validFrom        DateTime
+  validTo          DateTime?
+  status           String                   @default("ACTIVE")
+  approvalStatus   String                   @default("APPROVED")
+  speedLimit       Int                      @default(20)
+  allowedHours     String?
+  ruleDescription  String?
+  vehicles         OperationRegionVehicle[]
+  records          OperationRecord[]
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  @@index([enterpriseId, status])
+  @@index([organizationId, status])
+  @@index([approvalStatus])
+}
+
+model OperationRegionVehicle {
+  regionId   String
+  vehicleId  String
+  region     OperationRegion @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  vehicle    Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  assignedAt DateTime        @default(now())
+
+  @@id([regionId, vehicleId])
+  @@index([vehicleId])
+}
+
+model DeliveryOrder {
+  id             String       @id @default(cuid())
+  businessNo     String       @unique
+  vehicleId      String
+  vehicle        Vehicle      @relation(fields: [vehicleId], references: [id])
+  enterpriseId   String
+  enterprise     Enterprise   @relation(fields: [enterpriseId], references: [id])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  status         String       @default("IN_TRANSIT")
+  cargoType      String
+  cargoWeight    Float
+  startName      String
+  startAddress   String
+  startLng       Float
+  startLat       Float
+  endName        String
+  endAddress     String
+  endLng         Float
+  endLat         Float
+  progressPct    Int          @default(0)
+  etaMinutes     Int?
+  dispatchedAt   DateTime
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([vehicleId, status])
+  @@index([enterpriseId, status])
+  @@index([organizationId, status])
+}
+
+model OperationRecord {
+  id              String              @id @default(cuid())
+  businessNo      String              @unique
+  vehicleId       String
+  vehicle         Vehicle             @relation(fields: [vehicleId], references: [id])
+  enterpriseId    String
+  enterprise      Enterprise          @relation(fields: [enterpriseId], references: [id])
+  organizationId  String
+  organization    Organization        @relation(fields: [organizationId], references: [id])
+  regionId        String?
+  region          OperationRegion?    @relation(fields: [regionId], references: [id])
+  startedAt       DateTime
+  endedAt         DateTime?
+  startAddress    String?
+  endAddress      String?
+  mileage         Float               @default(0)
+  durationMinutes Int                 @default(0)
+  avgSpeed        Float               @default(0)
+  maxSpeed        Float               @default(0)
+  energyUsed      Float               @default(0)
+  status          String              @default("COMPLETED")
+  autonomousMiles Float               @default(0)
+  manualTakeovers Int                 @default(0)
+  trackPoints     VehicleTrackPoint[]
+  accidents       Accident[]
+  violations      Violation[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([vehicleId, startedAt])
+  @@index([enterpriseId, startedAt])
+  @@index([organizationId, startedAt])
+  @@index([status, startedAt])
+  @@index([regionId])
+}
+
+model VehicleTrackPoint {
+  id                String          @id @default(cuid())
+  operationRecordId String
+  operationRecord   OperationRecord @relation(fields: [operationRecordId], references: [id], onDelete: Cascade)
+  vehicleId         String
+  vehicle           Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  sequence          Int
+  longitude         Float
+  latitude          Float
+  speed             Float
+  battery           Int
+  heading           Float           @default(0)
+  autonomousState   String          @default("AUTO")
+  pointType         String          @default("NORMAL")
+  recordedAt        DateTime
+  createdAt         DateTime        @default(now())
+
+  @@unique([operationRecordId, sequence])
+  @@index([vehicleId, recordedAt])
+  @@index([pointType, recordedAt])
+}
+
+model VehicleOnlineDaily {
+  id            String    @id @default(cuid())
+  vehicleId     String
+  vehicle       Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  metricDate    DateTime
+  onlineMinutes Int
+  totalMinutes  Int       @default(1440)
+  onlineRate    Float
+  firstOnlineAt DateTime?
+  lastOnlineAt  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([vehicleId, metricDate])
+  @@index([metricDate, onlineRate])
+}
+
+model SafetyAlert {
+  id                String          @id @default(cuid())
+  businessNo        String          @unique
+  alertType         String
+  source            String
+  level             String          @default("MEDIUM")
+  title             String
+  description       String?
+  enterpriseId      String
+  enterprise        Enterprise      @relation(fields: [enterpriseId], references: [id])
+  organizationId    String
+  organization      Organization    @relation(fields: [organizationId], references: [id])
+  vehicleId         String?
+  vehicle           Vehicle?        @relation(fields: [vehicleId], references: [id])
+  longitude         Float?
+  latitude          Float?
+  address           String?
+  occurredAt        DateTime
+  status            String          @default("PENDING_CONFIRMATION")
+  responsibleUserId String?
+  responsibleUser   User?           @relation("AlertResponsible", fields: [responsibleUserId], references: [id])
+  confirmedAt       DateTime?
+  closedAt          DateTime?
+  lastComment       String?
+  fenceTrigger      FenceTrigger?
+  offlineEvent      OfflineEvent?
+  accidents         Accident[]
+  violations        Violation[]
+  emergencyTasks    EmergencyTask[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([enterpriseId, status, occurredAt])
+  @@index([organizationId, status, occurredAt])
+  @@index([vehicleId, occurredAt])
+  @@index([level, status])
+}
+
+model ElectronicFence {
+  id              String                   @id @default(cuid())
+  businessNo      String                   @unique
+  name            String
+  fenceType       String
+  enterpriseId    String?
+  enterprise      Enterprise?              @relation(fields: [enterpriseId], references: [id])
+  organizationId  String
+  organization    Organization             @relation(fields: [organizationId], references: [id])
+  polygonJson     String
+  validFrom       DateTime
+  validTo         DateTime?
+  active          Boolean                  @default(false)
+  speedLimit      Int?
+  allowedHours    String?
+  ruleDescription String?
+  vehicles        ElectronicFenceVehicle[]
+  triggers        FenceTrigger[]
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@index([enterpriseId, active])
+  @@index([organizationId, active])
+  @@index([fenceType, active])
+}
+
+model ElectronicFenceVehicle {
+  fenceId   String
+  vehicleId String
+  fence     ElectronicFence @relation(fields: [fenceId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  createdAt DateTime        @default(now())
+
+  @@id([fenceId, vehicleId])
+  @@index([vehicleId])
+}
+
+model FenceTrigger {
+  id          String          @id @default(cuid())
+  businessNo  String          @unique
+  fenceId     String
+  fence       ElectronicFence @relation(fields: [fenceId], references: [id])
+  vehicleId   String
+  vehicle     Vehicle         @relation(fields: [vehicleId], references: [id])
+  alertId     String          @unique
+  alert       SafetyAlert     @relation(fields: [alertId], references: [id])
+  triggerType String
+  longitude   Float
+  latitude    Float
+  speed       Float
+  occurredAt  DateTime
+  status      String          @default("ACTIVE")
+  recoveredAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([fenceId, occurredAt])
+  @@index([vehicleId, status])
+}
+
+model Accident {
+  id                String                  @id @default(cuid())
+  businessNo        String                  @unique
+  source            String
+  accidentType      String
+  level             String                  @default("MEDIUM")
+  title             String
+  description       String
+  enterpriseId      String
+  enterprise        Enterprise              @relation(fields: [enterpriseId], references: [id])
+  organizationId    String
+  organization      Organization            @relation(fields: [organizationId], references: [id])
+  vehicleId         String
+  vehicle           Vehicle                 @relation(fields: [vehicleId], references: [id])
+  operationRecordId String?
+  operationRecord   OperationRecord?        @relation(fields: [operationRecordId], references: [id])
+  alertId           String?
+  alert             SafetyAlert?            @relation(fields: [alertId], references: [id])
+  reporterUserId    String?
+  reporterUser      User?                   @relation("AccidentReporter", fields: [reporterUserId], references: [id])
+  emergencyTasks    EmergencyTask[]
+  reconstruction    AccidentReconstruction?
+  longitude         Float
+  latitude          Float
+  address           String?
+  occurredAt        DateTime
+  casualties        Int                     @default(0)
+  damageDescription String?
+  investigation     String?
+  responsibility    String?
+  disposalProgress  String?
+  attachmentJson    String?
+  status            String                  @default("REPORTED")
+  closedAt          DateTime?
+  archivedAt        DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  @@index([enterpriseId, status, occurredAt])
+  @@index([organizationId, status, occurredAt])
+  @@index([vehicleId, occurredAt])
+}
+
+model Violation {
+  id                String           @id @default(cuid())
+  businessNo        String           @unique
+  violationType     String
+  level             String           @default("MEDIUM")
+  title             String
+  description       String
+  enterpriseId      String
+  enterprise        Enterprise       @relation(fields: [enterpriseId], references: [id])
+  organizationId    String
+  organization      Organization     @relation(fields: [organizationId], references: [id])
+  vehicleId         String
+  vehicle           Vehicle          @relation(fields: [vehicleId], references: [id])
+  operationRecordId String?
+  operationRecord   OperationRecord? @relation(fields: [operationRecordId], references: [id])
+  alertId           String?
+  alert             SafetyAlert?     @relation(fields: [alertId], references: [id])
+  longitude         Float?
+  latitude          Float?
+  occurredAt        DateTime
+  determination     String?
+  rectification     String?
+  reviewComment     String?
+  status            String           @default("PENDING_DETERMINATION")
+  confirmedAt       DateTime?
+  closedAt          DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([enterpriseId, status, occurredAt])
+  @@index([organizationId, status, occurredAt])
+  @@index([vehicleId, occurredAt])
+}
+
+model OfflineEvent {
+  id              String       @id @default(cuid())
+  businessNo      String       @unique
+  vehicleId       String
+  vehicle         Vehicle      @relation(fields: [vehicleId], references: [id])
+  enterpriseId    String
+  enterprise      Enterprise   @relation(fields: [enterpriseId], references: [id])
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  alertId         String       @unique
+  alert           SafetyAlert  @relation(fields: [alertId], references: [id])
+  startedAt       DateTime
+  endedAt         DateTime?
+  durationMinutes Int          @default(0)
+  reason          String?
+  recoveryNote    String?
+  status          String       @default("OFFLINE")
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([enterpriseId, status, startedAt])
+  @@index([organizationId, status, startedAt])
+  @@index([vehicleId, status])
+}
+
+model EmergencyTask {
+  id              String             @id @default(cuid())
+  businessNo      String             @unique
+  alertId         String
+  alert           SafetyAlert        @relation(fields: [alertId], references: [id])
+  accidentId      String?
+  accident        Accident?          @relation(fields: [accidentId], references: [id])
+  enterpriseId    String
+  enterprise      Enterprise         @relation(fields: [enterpriseId], references: [id])
+  organizationId  String
+  organization    Organization       @relation(fields: [organizationId], references: [id])
+  level           String
+  title           String
+  requirement     String
+  responseMode    String?
+  assigneeUserId  String?
+  assigneeUser    User?              @relation("EmergencyAssignee", fields: [assigneeUserId], references: [id])
+  dueAt           DateTime
+  status          String             @default("PENDING_DISPATCH")
+  dispatchedAt    DateTime?
+  respondedAt     DateTime?
+  feedback        String?
+  attachmentJson  String?
+  evaluationScore Int?
+  evaluation      String?
+  reviewComment   String?
+  closedAt        DateTime?
+  logs            EmergencyTaskLog[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([enterpriseId, status, dueAt])
+  @@index([organizationId, status, dueAt])
+  @@index([alertId, createdAt])
+}
+
+model EmergencyTaskLog {
+  id          String        @id @default(cuid())
+  taskId      String
+  task        EmergencyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actorUserId String?
+  actorUser   User?         @relation("EmergencyLogActor", fields: [actorUserId], references: [id])
+  actorName   String
+  action      String
+  fromStatus  String?
+  toStatus    String
+  content     String?
+  createdAt   DateTime      @default(now())
+
+  @@index([taskId, createdAt])
+}
+
+model EvaluationIndicator {
+  id             String           @id @default(cuid())
+  code           String           @unique
+  name           String
+  dimension      String
+  metricKey      String
+  description    String?
+  weight         Float
+  direction      String           @default("LOWER_BETTER")
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  status         String           @default("ACTIVE")
+  rules          EvaluationRule[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([organizationId, status])
+  @@index([dimension, status])
+}
+
+model EvaluationRule {
+  id          String              @id @default(cuid())
+  indicatorId String
+  indicator   EvaluationIndicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+  minValue    Float?
+  maxValue    Float?
+  score       Float
+  label       String
+  orderNo     Int                 @default(0)
+  status      String              @default("ACTIVE")
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([indicatorId, orderNo])
+}
+
+model EvaluationTask {
+  id             String                 @id @default(cuid())
+  businessNo     String                 @unique
+  name           String
+  periodType     String
+  periodStart    DateTime
+  periodEnd      DateTime
+  organizationId String
+  organization   Organization           @relation(fields: [organizationId], references: [id])
+  status         String                 @default("DRAFT")
+  createdById    String
+  createdByName  String
+  generatedAt    DateTime?
+  publishedAt    DateTime?
+  evaluations    EnterpriseEvaluation[]
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([organizationId, status, periodEnd])
+}
+
+model EnterpriseEvaluation {
+  id              String             @id @default(cuid())
+  businessNo      String             @unique
+  taskId          String
+  task            EvaluationTask     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  enterpriseId    String
+  enterprise      Enterprise         @relation(fields: [enterpriseId], references: [id])
+  organizationId  String
+  organization    Organization       @relation(fields: [organizationId], references: [id])
+  totalScore      Float
+  grade           String
+  riskLevel       String
+  safetyScore     Float
+  complianceScore Float
+  operationScore  Float
+  breakdownJson   String
+  status          String             @default("DRAFT")
+  conclusion      String?
+  publishedAt     DateTime?
+  appeals         EvaluationAppeal[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@unique([taskId, enterpriseId])
+  @@index([enterpriseId, status, createdAt])
+  @@index([organizationId, riskLevel])
+}
+
+model EvaluationAppeal {
+  id              String               @id @default(cuid())
+  businessNo      String               @unique
+  evaluationId    String
+  evaluation      EnterpriseEvaluation @relation(fields: [evaluationId], references: [id])
+  enterpriseId    String
+  enterprise      Enterprise           @relation(fields: [enterpriseId], references: [id])
+  organizationId  String
+  organization    Organization         @relation(fields: [organizationId], references: [id])
+  reason          String
+  evidence        String?
+  status          String               @default("SUBMITTED")
+  submittedById   String
+  submittedByName String
+  reviewerId      String?
+  reviewerName    String?
+  reviewComment   String?
+  reviewedAt      DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([enterpriseId, status, createdAt])
+  @@index([organizationId, status])
+}
+
+model AccidentReconstruction {
+  id             String       @id @default(cuid())
+  accidentId     String       @unique
+  accident       Accident     @relation(fields: [accidentId], references: [id], onDelete: Cascade)
+  enterpriseId   String
+  enterprise     Enterprise   @relation(fields: [enterpriseId], references: [id])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  windowMinutes  Int          @default(30)
+  evidenceJson   String
+  causeJson      String
+  conclusion     String
+  recommendation String?
+  status         String       @default("DRAFT")
+  analystId      String
+  analystName    String
+  completedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, status])
+  @@index([enterpriseId, createdAt])
+}
+
+model RegulatoryReport {
+  id              String       @id @default(cuid())
+  businessNo      String       @unique
+  reportType      String
+  category        String
+  title           String
+  periodStart     DateTime
+  periodEnd       DateTime
+  enterpriseId    String?
+  enterprise      Enterprise?  @relation(fields: [enterpriseId], references: [id])
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  summaryJson     String
+  status          String       @default("GENERATED")
+  recipient       String?
+  generatedById   String
+  generatedByName String
+  generatedAt     DateTime     @default(now())
+  distributedAt   DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([organizationId, category, periodEnd])
+  @@index([enterpriseId, periodEnd])
+  @@index([status, generatedAt])
+}
