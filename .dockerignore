@@ -10,3 +10,8 @@ playwright-report
 *.log
 .git
 .codex
+.agents
+.cursor
+tests
+design-system
+.pnpm-store

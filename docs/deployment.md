@@ -16,6 +16,44 @@
 
 高德 Web 服务 Key 只用于服务端地理编码、路径规划、POI 等 REST 服务。本平台当前地图页面使用 JSAPI 展示已有监管坐标，不需要为了显示底图而调用 Web 服务 Key。
 
+## Render（Docker）
+
+仓库根目录的 `Dockerfile` 把前端 Nginx 和 API 打进同一个镜像，浏览器只访问一个 HTTPS 域名，`/api` 由容器内反向代理。这是给 Render 用的；本机仍用下面的 `docker compose` 双容器。
+
+1. 把包含 `Dockerfile` 和 `render.yaml` 的提交推到 GitHub。
+2. 在 Render 选择 **Docker**，不要用 Node/Phoenix 的 Build/Start Command。
+3. 表单按下面填写，或直接 **New > Blueprint** 导入 `render.yaml`。
+
+| 字段 | 填写 |
+|---|---|
+| Language / Runtime | Docker |
+| Region | Virginia (US East) |
+| Root Directory | 空 |
+| Dockerfile Path | `Dockerfile` |
+| Docker Build Context Directory | `.` |
+
+不要填 `mix phx.*`。选 Docker 后这两项会消失。
+
+环境变量（勾选 Available during build，前端 Key 必须在构建时注入）：
+
+```
+NODE_ENV=production
+DATABASE_URL=file:../data/regulatory.db
+JWT_ACCESS_SECRET=<至少32位随机串>
+JWT_REFRESH_SECRET=<另一组至少32位随机串>
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+VITE_AMAP_KEY=<高德 JSAPI Key>
+VITE_AMAP_SECURITY_JS_CODE=<高德安全密钥>
+VITE_AMAP_SERVICE_HOST=
+```
+
+`WEB_ORIGIN` 和 `PORT` 不用填：镜像会用 Render 提供的外网地址和端口。
+
+磁盘：挂 Persistent Disk 到 `/app/data`，否则 SQLite 每次部署都会丢。首次启动若库是空的会自动 `pnpm db:seed`。
+
+实例需要 **Starter** 及以上（Docker + 磁盘不在免费 Web Service 上）。健康检查路径：`/api/health`。
+
 ## 容器部署
 
 ```bash

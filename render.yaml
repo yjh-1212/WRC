@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: wrc
+    runtime: docker
+    plan: starter
+    region: virginia
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    disk:
+      name: wrc-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: file:../data/regulatory.db
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      - key: WEB_ORIGIN
+        fromService:
+          name: wrc
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: VITE_AMAP_KEY
+        sync: false
+      - key: VITE_AMAP_SECURITY_JS_CODE
+        sync: false
+      - key: VITE_AMAP_SERVICE_HOST
+        value: ""

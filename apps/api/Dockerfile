@@ -20,4 +20,4 @@ COPY --from=build /app/apps/api ./apps/api
 COPY --from=build /app/prisma ./prisma
 RUN mkdir -p /app/data
 EXPOSE 8080
-CMD ["sh", "-c", "pnpm db:deploy && node apps/api/dist/main.js"]
+CMD ["sh", "-c", "pnpm db:deploy && exec node apps/api/dist/main.js"]
