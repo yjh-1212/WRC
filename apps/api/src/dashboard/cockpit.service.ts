@@ -86,9 +86,11 @@ export class CockpitService {
 
     const level = vehicleRow ? 'vehicle' : enterprise ? 'enterprise' : org && requestedLevel !== 'city' ? 'district' : 'city';
     const located = vehicles.filter((item) => Number.isFinite(item.realtimeStatus?.longitude) && Number.isFinite(item.realtimeStatus?.latitude));
-    const orderRows = await this.prisma.$queryRaw<Array<{ vehicleId: string }>>`
-      SELECT DISTINCT vehicleId FROM DeliveryOrder WHERE status IN ('DISPATCHED', 'IN_TRANSIT')
-    `;
+    const orderRows = await this.prisma.deliveryOrder.findMany({
+      where: { status: { in: ['DISPATCHED', 'IN_TRANSIT'] } },
+      distinct: ['vehicleId'],
+      select: { vehicleId: true },
+    }).catch(() => [] as Array<{ vehicleId: string }>);
     const orderVehicleIds = new Set(orderRows.map((row) => row.vehicleId));
     const online = vehicles.filter((item) => item.onlineStatus === 'ONLINE');
     const running = vehicles.filter((item) => item.onlineStatus === 'ONLINE' && item.realtimeStatus?.drivingState === 'RUNNING');
@@ -122,18 +124,17 @@ export class CockpitService {
             trackPoints: { orderBy: { sequence: 'asc' }, select: { longitude: true, latitude: true, recordedAt: true, speed: true, heading: true } },
           },
         }),
-        this.prisma.$queryRaw<Array<{
-          businessNo: string; status: string; cargoType: string; cargoWeight: number;
-          startName: string; startAddress: string; endName: string; endAddress: string;
-          startLng: number; startLat: number; endLng: number; endLat: number;
-          progressPct: number; etaMinutes: number | null; dispatchedAt: Date; startedAt: Date | null;
-        }>>`
-          SELECT businessNo, status, cargoType, cargoWeight, startName, startAddress, endName, endAddress,
-                 startLng, startLat, endLng, endLat, progressPct, etaMinutes, dispatchedAt, startedAt
-          FROM DeliveryOrder
-          WHERE vehicleId = ${vehicleRow.id} AND status IN ('DISPATCHED', 'IN_TRANSIT')
-          ORDER BY dispatchedAt DESC LIMIT 1
-        `,
+        this.prisma.deliveryOrder.findMany({
+          where: { vehicleId: vehicleRow.id, status: { in: ['DISPATCHED', 'IN_TRANSIT'] } },
+          orderBy: { dispatchedAt: 'desc' },
+          take: 1,
+          select: {
+            businessNo: true, status: true, cargoType: true, cargoWeight: true,
+            startName: true, startAddress: true, endName: true, endAddress: true,
+            startLng: true, startLat: true, endLng: true, endLat: true,
+            progressPct: true, etaMinutes: true, dispatchedAt: true, startedAt: true,
+          },
+        }).catch(() => []),
       ]);
       const rawTrack = record?.trackPoints ?? [];
       if (rawTrack.length <= 320) track = rawTrack;
