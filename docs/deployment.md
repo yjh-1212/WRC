@@ -16,43 +16,39 @@
 
 高德 Web 服务 Key 只用于服务端地理编码、路径规划、POI 等 REST 服务。本平台当前地图页面使用 JSAPI 展示已有监管坐标，不需要为了显示底图而调用 Web 服务 Key。
 
-## Render（Docker）
+## Render（免费 Node）
 
-仓库根目录的 `Dockerfile` 把前端 Nginx 和 API 打进同一个镜像，浏览器只访问一个 HTTPS 域名，`/api` 由容器内反向代理。这是给 Render 用的；本机仍用下面的 `docker compose` 双容器。
+免费档不能用 Docker，也不能挂持久磁盘。用 **Node Web Service + Free**，构建时写入 SQLite 演示数据，API 同时托管前端页面。
 
-1. 把包含 `Dockerfile` 和 `render.yaml` 的提交推到 GitHub。
-2. 在 Render 选择 **Docker**，不要用 Node/Phoenix 的 Build/Start Command。
-3. 表单按下面填写，或直接 **New > Blueprint** 导入 `render.yaml`。
+1. 把最新代码推到 GitHub。
+2. New Web Service，Language 选 **Node**，实例选 **Free**。不要选 Docker，也不要填 `mix phx.*`。
+3. 也可 **New > Blueprint** 导入 `render.yaml`。
 
 | 字段 | 填写 |
 |---|---|
-| Language / Runtime | Docker |
+| Language | Node |
+| Instance type | Free |
 | Region | Virginia (US East) |
 | Root Directory | 空 |
-| Dockerfile Path | `Dockerfile` |
-| Docker Build Context Directory | `.` |
+| Build Command | `corepack enable && pnpm install --frozen-lockfile && pnpm db:generate && pnpm --filter api build && pnpm --filter web build && mkdir -p data && pnpm db:deploy && pnpm db:seed` |
+| Start Command | `node apps/api/dist/main.js` |
 
-不要填 `mix phx.*`。选 Docker 后这两项会消失。
-
-环境变量（勾选 Available during build，前端 Key 必须在构建时注入）：
+环境变量（`VITE_*` 勾选 Available during build）：
 
 ```
+NODE_VERSION=22
 NODE_ENV=production
+PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 DATABASE_URL=file:../data/regulatory.db
 JWT_ACCESS_SECRET=<至少32位随机串>
 JWT_REFRESH_SECRET=<另一组至少32位随机串>
-JWT_ACCESS_EXPIRES_IN=15m
-JWT_REFRESH_EXPIRES_IN=7d
 VITE_AMAP_KEY=<高德 JSAPI Key>
 VITE_AMAP_SECURITY_JS_CODE=<高德安全密钥>
-VITE_AMAP_SERVICE_HOST=
 ```
 
-`WEB_ORIGIN` 和 `PORT` 不用填：镜像会用 Render 提供的外网地址和端口。
+`PORT`、`WEB_ORIGIN` 不用填。健康检查：`/api/health`。
 
-磁盘：挂 Persistent Disk 到 `/app/data`，否则 SQLite 每次部署都会丢。首次启动若库是空的会自动 `pnpm db:seed`。
-
-实例需要 **Starter** 及以上（Docker + 磁盘不在免费 Web Service 上）。健康检查路径：`/api/health`。
+免费实例约 15 分钟无访问会休眠，下次打开要等约 1 分钟。没有磁盘，休眠或重新部署后只保留构建时写入的演示数据。付费 Docker 方案仍可用仓库根目录 `Dockerfile`。
 
 ## 容器部署
 

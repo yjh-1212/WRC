@@ -1,20 +1,20 @@
 services:
   - type: web
     name: wrc
-    runtime: docker
-    plan: starter
+    runtime: node
+    plan: free
     region: virginia
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm db:generate && pnpm --filter api build && pnpm --filter web build && mkdir -p data && pnpm db:deploy && pnpm db:seed
+    startCommand: node apps/api/dist/main.js
     healthCheckPath: /api/health
     autoDeployTrigger: commit
-    disk:
-      name: wrc-data
-      mountPath: /app/data
-      sizeGB: 1
     envVars:
+      - key: NODE_VERSION
+        value: "22"
       - key: NODE_ENV
         value: production
+      - key: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD
+        value: "1"
       - key: DATABASE_URL
         value: file:../data/regulatory.db
       - key: JWT_ACCESS_SECRET

@@ -1,18 +1,37 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { AppModule } from './app.module';
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import { ApiResponseInterceptor } from './common/api-response.interceptor';
 import { RequestLogInterceptor } from './common/request-log.interceptor';
 
+function serveWebApp(app: NestExpressApplication) {
+  const webDist = join(__dirname, '..', '..', 'web', 'dist');
+  const indexFile = join(webDist, 'index.html');
+  if (!existsSync(indexFile)) return;
+  app.useStaticAssets(webDist, { index: false });
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    if (req.path.startsWith('/api') || req.path.startsWith('/swagger')) return next();
+    if (req.path.includes('.') && !req.path.endsWith('.html')) return next();
+    res.sendFile(indexFile);
+  });
+}
+
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.enableShutdownHooks();
   app.setGlobalPrefix('api');
   app.use(helmet());
   const allowedOrigins = (process.env.WEB_ORIGIN ?? 'http://localhost:5173').split(',').map((item) => item.trim()).filter(Boolean);
+  const renderOrigin = process.env.RENDER_EXTERNAL_URL?.trim();
+  if (renderOrigin && !allowedOrigins.includes(renderOrigin)) allowedOrigins.push(renderOrigin);
   app.enableCors({
     origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => callback(null, !origin || allowedOrigins.includes(origin)),
     credentials: true,
@@ -28,6 +47,7 @@ async function bootstrap() {
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
     .build();
   SwaggerModule.setup('swagger', app, SwaggerModule.createDocument(app, config));
+  serveWebApp(app);
   const port = Number(process.env.PORT ?? 8080);
   await app.listen(port, '0.0.0.0');
 }
