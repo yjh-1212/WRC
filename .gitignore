@@ -5,6 +5,7 @@ dist/
 apps/*/.env
 apps/*/.env.local
 data/*.db*
+!data/regulatory.db
 playwright-report/
 test-results/
 .pnpm-store/
