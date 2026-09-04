@@ -29,10 +29,12 @@ async function bootstrap() {
   app.enableShutdownHooks();
   app.setGlobalPrefix('api');
   app.use(helmet({
+    // 高德按 Referer 校验域名；默认 no-referrer 会导致 INVALID_USER_DOMAIN
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-eval'", "'unsafe-inline'", 'https://webapi.amap.com', 'https://restapi.amap.com'],
+        scriptSrc: ["'self'", "'unsafe-eval'", "'unsafe-inline'", 'https://webapi.amap.com', 'https://jsapi.amap.com', 'https://restapi.amap.com'],
         workerSrc: ["'self'", 'blob:'],
         childSrc: ["'self'", 'blob:'],
         imgSrc: ["'self'", 'data:', 'blob:', 'https:'],

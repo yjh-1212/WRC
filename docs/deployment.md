@@ -48,6 +48,8 @@ VITE_AMAP_SECURITY_JS_CODE=<高德安全密钥>
 
 `PORT`、`WEB_ORIGIN` 不用填。健康检查：`/api/health`。
 
+高德 Key：在 [高德控制台](https://console.amap.com/) 打开该 Web 端 Key，把 Render 域名加进「域名白名单」，例如 `你的服务.onrender.com`（不要带 `https://`）。未加白名单时底图会 `INVALID_USER_DOMAIN`。构建时必须注入 `VITE_AMAP_KEY` 与 `VITE_AMAP_SECURITY_JS_CODE`，漏配会导致前端打包后没有地图密钥。
+
 免费实例约 15 分钟无访问会休眠，下次打开要等约 1 分钟。没有磁盘，休眠或重新部署后只保留构建时写入的演示数据。付费 Docker 方案仍可用仓库根目录 `Dockerfile`。
 
 ## 容器部署
