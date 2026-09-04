@@ -145,12 +145,12 @@ function matchesTaskFilter(item: DashboardTask) {
   return true;
 }
 
-const greetingTail = computed(() => {
+const situationLead = computed(() => {
   if (!summary.value) return '';
   const m = summary.value.metrics;
-  const watch = m.severeAlerts > 0 || m.overdueActions > 0 || m.overdueApprovals > 0;
-  const head = watch ? '今日整体运行存在重点关注事项' : '今日监管范围运行总体平稳';
-  return `${head}，当前 ${m.currentOnline} 辆车辆在线，存在 ${m.todayAlerts} 条告警、${m.pendingActions} 项待处置事项、${m.pendingApprovals} 项审批待办。`;
+  if (m.severeAlerts > 0 || m.overdueActions > 0 || m.overdueApprovals > 0) return '今日整体运行存在重点关注事项，请优先处理告警与超时待办。';
+  if (m.todayAlerts > 0 || m.pendingApprovals > 0) return '运行总体可控，仍有告警或审批事项待跟进。';
+  return '今日监管范围运行总体平稳，暂无高优先级积压。';
 });
 const situationState = computed(() => {
   if (!summary.value) return { label: '评估中', tone: '' };
@@ -270,20 +270,27 @@ onMounted(load);
     </div>
     <template v-else>
       <div v-if="!summary" class="dashboard-skeleton-metrics reg-skeleton" aria-label="正在加载监管指标"><el-skeleton-item v-for="n in 6" :key="n" variant="rect" /></div>
-      <header v-else class="reg-head">
-        <div>
-          <p class="reg-summary">{{ greetingTail }}</p>
-        </div>
-        <div class="reg-head-meta">
-          <dl>
-            <div><dt>监管区域</dt><dd>{{ summary.meta.scopeName }}</dd></div>
-            <div :class="situationState.tone"><dt>监管态势</dt><dd>{{ situationState.label }}</dd></div>
-            <div><dt>待办事项</dt><dd>{{ summary.meta.openWork }}</dd></div>
-          </dl>
-          <div class="reg-head-actions">
-            <span>更新于 {{ formatTime(summary.meta.updatedAt) }}</span>
-            <el-button :icon="RefreshCw" :loading="loading.summary" aria-label="刷新监管总览" @click="load">刷新</el-button>
+      <header v-else class="dash-head reg-head">
+        <div class="dash-head-main">
+          <div class="dash-head-title-row">
+            <h2 class="dash-head-title">{{ summary.meta.scopeName }}监管总览</h2>
+            <span class="dash-head-badge" :class="situationState.tone">{{ situationState.label }}</span>
           </div>
+          <p class="dash-head-desc">{{ situationLead }}</p>
+          <div class="dash-head-chips" aria-label="关键概览">
+            <span><em>在线车辆</em><strong>{{ summary.metrics.currentOnline }}</strong></span>
+            <span><em>今日告警</em><strong :class="{ 'is-risk': summary.metrics.severeAlerts > 0 }">{{ summary.metrics.todayAlerts }}</strong></span>
+            <span><em>待处置</em><strong :class="{ 'is-watch': summary.metrics.pendingActions > 0 }">{{ summary.metrics.pendingActions }}</strong></span>
+            <span><em>审批待办</em><strong :class="{ 'is-watch': summary.metrics.pendingApprovals > 0 }">{{ summary.metrics.pendingApprovals }}</strong></span>
+          </div>
+        </div>
+        <div class="dash-head-side">
+          <div class="dash-head-stat">
+            <em>待办合计</em>
+            <strong>{{ summary.meta.openWork }}</strong>
+          </div>
+          <time class="dash-head-time">更新于 {{ formatTime(summary.meta.updatedAt) }}</time>
+          <el-button :icon="RefreshCw" :loading="loading.summary" aria-label="刷新监管总览" @click="load">刷新</el-button>
         </div>
       </header>
       <div v-if="errors.summary" class="dashboard-refresh-error" role="alert">

@@ -94,10 +94,6 @@ const greet = computed(() => {
   return '晚上好';
 });
 const priorityCount = computed(() => tasks.value.filter((item) => item.level === 'CRITICAL' || item.level === 'HIGH').length);
-const greetingTail = computed(() => {
-  if (!taskTotal.value) return '当前没有待处理事项，运营状态正常。';
-  return `今日共有 ${taskTotal.value} 项事项待处理，其中 ${priorityCount.value} 项需要优先关注。`;
-});
 const safetyState = computed(() => {
   if (!summary.value) return { label: '正常', tone: 'ok' };
   if (summary.value.metrics.severeAlerts > 0 || summary.value.metrics.overdueActions > 0) return { label: '需关注', tone: 'watch' };
@@ -207,21 +203,23 @@ onMounted(load);
     </div>
     <template v-else>
       <div v-if="!summary" class="dashboard-skeleton-metrics ent-skeleton" aria-label="正在加载企业指标"><el-skeleton-item v-for="n in 6" :key="n" variant="rect" /></div>
-      <header v-else class="ent-head">
-        <div>
-          <p class="enterprise-brief ent-company"><strong>{{ summary.meta.enterprise.name }}</strong></p>
-          <p class="ent-summary">{{ greet }}，{{ greetingTail }}</p>
-        </div>
-        <div class="ent-head-meta">
-          <dl>
-            <div><dt>在线率</dt><dd>{{ summary.metrics.onlineRate }}%</dd></div>
-            <div><dt>今日里程</dt><dd>{{ summary.metrics.todayMileage }} km</dd></div>
-            <div :class="safetyState.tone"><dt>安全状态</dt><dd>{{ safetyState.label }}</dd></div>
-          </dl>
-          <div class="ent-head-actions">
-            <span>更新于 {{ formatTime(summary.meta.updatedAt) }}</span>
-            <el-button :icon="RefreshCw" :loading="loading.summary" aria-label="刷新企业运营工作台" @click="load">刷新</el-button>
+      <header v-else class="dash-head ent-head">
+        <div class="dash-head-main">
+          <div class="dash-head-title-row">
+            <h2 class="dash-head-title">{{ summary.meta.enterprise.name }}</h2>
+            <span class="dash-head-badge" :class="safetyState.tone">{{ safetyState.label }}</span>
           </div>
+          <p class="dash-head-desc">{{ greet }}，今日 <b>{{ taskTotal }}</b> 项待处理<span v-if="priorityCount"> · <b class="is-watch">{{ priorityCount }}</b> 项优先关注</span><span v-else> · 运营状态正常</span></p>
+          <div class="dash-head-chips" aria-label="关键概览">
+            <span><em>在线率</em><strong>{{ summary.metrics.onlineRate }}%</strong></span>
+            <span><em>今日里程</em><strong>{{ summary.metrics.todayMileage }}<small>km</small></strong></span>
+            <span><em>待处理</em><strong>{{ summary.metrics.pendingActions }}</strong></span>
+            <span><em>今日告警</em><strong :class="{ 'is-risk': summary.metrics.severeAlerts > 0 }">{{ summary.metrics.todayAlerts }}</strong></span>
+          </div>
+        </div>
+        <div class="dash-head-side">
+          <time class="dash-head-time">更新于 {{ formatTime(summary.meta.updatedAt) }}</time>
+          <el-button :icon="RefreshCw" :loading="loading.summary" aria-label="刷新企业运营工作台" @click="load">刷新</el-button>
         </div>
       </header>
       <div v-if="errors.summary" class="dashboard-refresh-error" role="alert">
