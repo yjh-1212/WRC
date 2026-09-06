@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMinSize, IsArray, IsEmail, IsIn, IsInt, IsOptional, IsString, Length, Max, Min, MinLength } from 'class-validator';
+import { ArrayMinSize, IsArray, IsEmail, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Length, Max, Min, MinLength } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 
 const emptyToUndefined = ({ value }: { value: unknown }) => (value === '' ? undefined : value);
@@ -15,7 +15,7 @@ export class PageQueryDto {
 export class CreateUserDto {
   @ApiProperty() @IsString() @Length(3, 30) username!: string;
   @ApiProperty() @IsString() @MinLength(8) password!: string;
-  @ApiProperty() @IsString() displayName!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() displayName!: string;
   @ApiPropertyOptional() @IsOptional() @Transform(emptyToUndefined) @IsEmail() email?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @Length(0, 32) phone?: string;
   @ApiProperty() @IsIn(['REGULATORY', 'ENTERPRISE']) portal!: string;
@@ -48,9 +48,9 @@ export class CreateOrganizationDto {
   @ApiPropertyOptional() @IsOptional() @Transform(emptyToUndefined) @IsString() parentId?: string;
 }
 export class CreateEnterpriseDto {
-  @ApiProperty() @IsString() businessNo!: string;
-  @ApiProperty() @IsString() name!: string;
-  @ApiProperty() @IsString() creditCode!: string;
-  @ApiProperty() @IsString() organizationId!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() businessNo!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() name!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() creditCode!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() organizationId!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() type?: string;
 }

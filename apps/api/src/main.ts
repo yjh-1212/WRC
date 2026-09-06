@@ -10,6 +10,7 @@ import { AppModule } from './app.module';
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import { ApiResponseInterceptor } from './common/api-response.interceptor';
 import { RequestLogInterceptor } from './common/request-log.interceptor';
+import { validationExceptionFactory } from './common/validation';
 
 function serveWebApp(app: NestExpressApplication) {
   const webDist = join(__dirname, '..', '..', 'web', 'dist');
@@ -54,7 +55,12 @@ async function bootstrap() {
     origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => callback(null, !origin || allowedOrigins.includes(origin)),
     credentials: true,
   });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,
+    transform: true,
+    forbidNonWhitelisted: true,
+    exceptionFactory: validationExceptionFactory,
+  }));
   app.useGlobalFilters(new ApiExceptionFilter());
   app.useGlobalInterceptors(new RequestLogInterceptor(), new ApiResponseInterceptor());
 

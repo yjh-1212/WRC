@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
 
 export class SafetyQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsString() q?: string;
@@ -22,10 +22,10 @@ export class CoordinateDto {
 }
 
 export class CreateAlertDto {
-  @ApiProperty() @IsString() vehicleId!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() vehicleId!: string;
   @ApiProperty() @IsIn(['VEHICLE_FAULT', 'AUTONOMOUS_ABNORMAL', 'SYSTEM_ABNORMAL', 'OVERSPEED', 'OUT_OF_BOUNDS', 'NO_ENTRY', 'OFFLINE', 'DEVICE_ABNORMAL', 'SENSOR_ABNORMAL', 'MANUAL_REPORT', 'OTHER']) alertType!: string;
   @ApiProperty() @IsIn(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']) level!: string;
-  @ApiProperty() @IsString() title!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() title!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() longitude?: number;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() latitude?: number;
@@ -39,12 +39,12 @@ export class AlertActionDto {
 }
 
 export class CreateFenceDto {
-  @ApiProperty() @IsString() businessNo!: string;
-  @ApiProperty() @IsString() name!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() businessNo!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() name!: string;
   @ApiProperty() @IsIn(['NO_ENTRY', 'SPEED_LIMIT', 'OPERATION', 'TEMPORARY']) fenceType!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string;
-  @ApiProperty() @IsString() organizationId!: string;
-  @ApiProperty({ type: [CoordinateDto] }) @IsArray() @ArrayMaxSize(200) @ValidateNested({ each: true }) @Type(() => CoordinateDto) polygon!: CoordinateDto[];
+  @ApiProperty() @IsString() @IsNotEmpty() organizationId!: string;
+  @ApiProperty({ type: [CoordinateDto] }) @IsArray() @ArrayMinSize(3) @ArrayMaxSize(200) @ValidateNested({ each: true }) @Type(() => CoordinateDto) polygon!: CoordinateDto[];
   @ApiProperty() @IsDateString() validFrom!: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() validTo?: string;
   @ApiPropertyOptional() @IsOptional() @Type(() => Boolean) active?: boolean;
@@ -58,13 +58,13 @@ export class UpdateFenceDto extends PartialType(CreateFenceDto) {}
 export class FenceStatusDto { @ApiProperty() @IsBoolean() active!: boolean; }
 
 export class CreateAccidentDto {
-  @ApiProperty() @IsString() vehicleId!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() vehicleId!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() operationRecordId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() alertId?: string;
   @ApiProperty() @IsIn(['COLLISION', 'PERSON_INJURY', 'PROPERTY_DAMAGE', 'LOSS_OF_CONTROL', 'OTHER']) accidentType!: string;
   @ApiProperty() @IsIn(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']) level!: string;
-  @ApiProperty() @IsString() title!: string;
-  @ApiProperty() @IsString() description!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() title!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() description!: string;
   @ApiProperty() @Type(() => Number) @IsNumber() longitude!: number;
   @ApiProperty() @Type(() => Number) @IsNumber() latitude!: number;
   @ApiPropertyOptional() @IsOptional() @IsString() address?: string;
@@ -79,13 +79,13 @@ export class AccidentActionDto {
 }
 
 export class CreateViolationDto {
-  @ApiProperty() @IsString() vehicleId!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() vehicleId!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() operationRecordId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() alertId?: string;
   @ApiProperty() @IsIn(['OVERSPEED', 'OUT_OF_BOUNDS', 'NO_ENTRY', 'OVERTIME', 'ILLEGAL_OPERATION', 'OTHER']) violationType!: string;
   @ApiProperty() @IsIn(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']) level!: string;
-  @ApiProperty() @IsString() title!: string;
-  @ApiProperty() @IsString() description!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() title!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() description!: string;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() longitude?: number;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() latitude?: number;
   @ApiProperty() @IsDateString() occurredAt!: string;
@@ -93,7 +93,7 @@ export class CreateViolationDto {
 
 export class ViolationActionDto {
   @ApiProperty() @IsIn(['CONFIRM', 'REQUEST_RECTIFICATION', 'SUBMIT_RECTIFICATION', 'APPROVE', 'RETURN']) action!: string;
-  @ApiProperty() @IsString() comment!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() comment!: string;
 }
 
 export class OfflineActionDto {
@@ -102,10 +102,10 @@ export class OfflineActionDto {
 }
 
 export class CreateEmergencyTaskDto {
-  @ApiProperty() @IsString() alertId!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() alertId!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() accidentId?: string;
-  @ApiProperty() @IsString() title!: string;
-  @ApiProperty() @IsString() requirement!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() title!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() requirement!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() assigneeUserId?: string;
   @ApiPropertyOptional() @IsOptional() @IsIn(['REMOTE', 'FIELD']) responseMode?: string;
   @ApiProperty() @IsDateString() dueAt!: string;

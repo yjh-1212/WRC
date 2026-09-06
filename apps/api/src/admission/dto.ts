@@ -1,7 +1,7 @@
 import { PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601,
+  ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsNotEmpty,
   IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateNested,
 } from 'class-validator';
 
@@ -87,7 +87,7 @@ export class UpdateProcessDefinitionDto {
 }
 
 export class IssueLicenseDto {
-  @IsString() vehicleId!: string;
+  @IsString() @IsNotEmpty() vehicleId!: string;
   @IsString() @MinLength(4) @MaxLength(40) businessNo!: string;
   @IsString() @MinLength(4) @MaxLength(40) licenseNo!: string;
   @IsISO8601() issuedAt!: string;

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
 
 export class OperationsQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsString() q?: string;
@@ -28,13 +28,13 @@ export class CoordinateDto {
 }
 
 export class CreateOperationRegionDto {
-  @ApiProperty() @IsString() businessNo!: string;
-  @ApiProperty() @IsString() name!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() businessNo!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() name!: string;
   @ApiPropertyOptional() @IsOptional() @IsIn(['OPERATION', 'ROAD_TEST', 'TEMPORARY']) regionType?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string;
-  @ApiProperty() @IsString() organizationId!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() organizationId!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() approvalResultId?: string;
-  @ApiProperty({ type: [CoordinateDto] }) @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => CoordinateDto) polygon!: CoordinateDto[];
+  @ApiProperty({ type: [CoordinateDto] }) @IsArray() @ArrayMinSize(3) @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => CoordinateDto) polygon!: CoordinateDto[];
   @ApiProperty() @IsDateString() validFrom!: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() validTo?: string;
   @ApiPropertyOptional() @IsOptional() @IsIn(['PENDING', 'APPROVED', 'REJECTED']) approvalStatus?: string;
@@ -50,7 +50,7 @@ export class UpdateOperationRegionStatusDto {
 }
 
 export class TelemetryDto {
-  @ApiProperty() @IsString() vehicleId!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() vehicleId!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() operationRecordId?: string;
   @ApiProperty() @Type(() => Number) @IsNumber() longitude!: number;
   @ApiProperty() @Type(() => Number) @IsNumber() latitude!: number;

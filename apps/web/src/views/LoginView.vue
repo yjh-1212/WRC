@@ -12,7 +12,10 @@ const root = ref<HTMLElement | null>(null);
 let motion: ReturnType<typeof gsap.matchMedia> | undefined;
 
 async function submit() {
-  error.value = ''; loading.value = true;
+  error.value = '';
+  if (!username.value.trim()) { error.value = '请填写登录账号'; return; }
+  if (!password.value) { error.value = '请填写密码'; return; }
+  loading.value = true;
   try { await session.login(username.value.trim(), password.value); ElMessage.success('登录成功'); await router.replace(String(route.query.redirect ?? '/')); }
   catch (e) { error.value = e instanceof Error ? e.message : '登录失败，请重试'; }
   finally { loading.value = false; }

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class AnalyticsQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsString() q?: string;
@@ -17,7 +17,7 @@ export class AnalyticsQueryDto {
 }
 
 export class CreateEvaluationTaskDto {
-  @ApiProperty() @IsString() name!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() name!: string;
   @ApiProperty() @IsIn(['DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL', 'SPECIAL']) periodType!: string;
   @ApiProperty() @IsDateString() periodStart!: string;
   @ApiProperty() @IsDateString() periodEnd!: string;
@@ -40,7 +40,7 @@ export class UpdateRuleDto {
 
 export class SaveReconstructionDto {
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(5) @Max(180) windowMinutes?: number;
-  @ApiProperty() @IsString() conclusion!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() conclusion!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() recommendation?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() primaryCause?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() contributingFactor?: string;
@@ -48,19 +48,19 @@ export class SaveReconstructionDto {
 }
 
 export class CreateAppealDto {
-  @ApiProperty() @IsString() reason!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() reason!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() evidence?: string;
 }
 
 export class ReviewAppealDto {
   @ApiProperty() @IsIn(['ACCEPT', 'REJECT']) action!: string;
-  @ApiProperty() @IsString() comment!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() comment!: string;
 }
 
 export class CreateReportDto {
   @ApiProperty() @IsIn(['DAILY', 'WEEKLY', 'MONTHLY', 'SPECIAL']) reportType!: string;
   @ApiProperty() @IsIn(['OPERATIONS', 'SAFETY', 'COMPREHENSIVE', 'ENTERPRISE']) category!: string;
-  @ApiProperty() @IsString() title!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() title!: string;
   @ApiProperty() @IsDateString() periodStart!: string;
   @ApiProperty() @IsDateString() periodEnd!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string;

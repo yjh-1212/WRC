@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class ArchivePageQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsString() q?: string;
@@ -16,8 +16,8 @@ export class ArchivePageQueryDto {
 }
 
 export class CreateManufacturerDto {
-  @ApiProperty() @IsString() businessNo!: string;
-  @ApiProperty() @IsString() name!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() businessNo!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() name!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() shortName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() creditCode?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() contactName?: string;
@@ -27,10 +27,10 @@ export class CreateManufacturerDto {
 export class UpdateManufacturerDto extends PartialType(CreateManufacturerDto) {}
 
 export class CreateVehicleModelDto {
-  @ApiProperty() @IsString() businessNo!: string;
-  @ApiProperty() @IsString() modelCode!: string;
-  @ApiProperty() @IsString() name!: string;
-  @ApiProperty() @IsString() manufacturerId!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() businessNo!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() modelCode!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() name!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() manufacturerId!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() vehicleType?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() autonomyLevel?: string;
   @ApiProperty() @Type(() => Number) @IsInt() @Min(1) maxSpeed!: number;
@@ -41,11 +41,11 @@ export class CreateVehicleModelDto {
 export class UpdateVehicleModelDto extends PartialType(CreateVehicleModelDto) {}
 
 export class CreateVehicleDto {
-  @ApiProperty() @IsString() businessNo!: string;
-  @ApiProperty() @IsString() vin!: string;
-  @ApiProperty() @IsString() deviceNo!: string;
-  @ApiProperty() @IsString() name!: string;
-  @ApiProperty() @IsString() modelId!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() businessNo!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() vin!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() deviceNo!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() name!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() modelId!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() organizationId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() color?: string;
@@ -59,9 +59,9 @@ export class UpdateStatusDto {
 }
 
 export class CreateLicenseDto {
-  @ApiProperty() @IsString() businessNo!: string;
-  @ApiProperty() @IsString() licenseNo!: string;
-  @ApiProperty() @IsString() vehicleId!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() businessNo!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() licenseNo!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() vehicleId!: string;
   @ApiProperty() @IsDateString() issuedAt!: string;
   @ApiProperty() @IsDateString() expiresAt!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() remark?: string;
@@ -79,10 +79,10 @@ export class UpdateEnterpriseArchiveDto {
 
 export class CreateQualificationDto {
   @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string;
-  @ApiProperty() @IsString() businessNo!: string;
-  @ApiProperty() @IsString() qualificationType!: string;
-  @ApiProperty() @IsString() certificateNo!: string;
-  @ApiProperty() @IsString() issuedBy!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() businessNo!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() qualificationType!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() certificateNo!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() issuedBy!: string;
   @ApiProperty() @IsDateString() issuedAt!: string;
   @ApiProperty() @IsDateString() expiresAt!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() attachmentUrl?: string;

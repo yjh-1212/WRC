@@ -18,7 +18,13 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
       window.location.assign('/login');
     }
   }
-  const body = await response.json() as ApiEnvelope<T>;
-  if (!response.ok) throw new Error(body.message || '请求失败');
+  let body: ApiEnvelope<T>;
+  try {
+    body = await response.json() as ApiEnvelope<T>;
+  } catch {
+    throw new Error(response.ok ? '响应解析失败' : `请求失败（${response.status}）`);
+  }
+  const message = Array.isArray(body.message) ? body.message.join('；') : body.message;
+  if (!response.ok) throw new Error(message || '请求失败');
   return body.data;
 }

@@ -155,6 +155,15 @@ export class SafetyService {
     if (active && current.validTo && current.validTo < new Date()) throw new BadRequestException('已过期围栏不能启用');
     const item = await this.prisma.electronicFence.update({ where: { id }, data: { active } }); await this.auth.audit(user, 'safety', 'electronicFence', id, active ? 'ENABLE' : 'DISABLE'); return item;
   }
+  async deleteFence(user: AuthUser, id: string) {
+    const current = await this.prisma.electronicFence.findFirst({ where: { id, ...this.scoped(user) }, include: { _count: { select: { triggers: true } } } });
+    if (!current) throw new NotFoundException('电子围栏不存在或不在当前数据范围内');
+    await this.assertRegulatoryWrite(user, current.organizationId);
+    if (current._count.triggers) throw new BadRequestException('该围栏已有触发记录，不能删除。请先停用围栏，历史告警将继续保留');
+    await this.prisma.electronicFence.delete({ where: { id } });
+    await this.auth.audit(user, 'safety', 'electronicFence', id, 'DELETE', { businessNo: current.businessNo, name: current.name });
+    return { id, deleted: true };
+  }
 
   async processTelemetry(vehicle: { id: string; name: string; enterpriseId: string; organizationId: string }, telemetry: { longitude: number; latitude: number; speed: number }, recordedAt: Date) {
     const fences = await this.prisma.electronicFence.findMany({ where: { active: true, validFrom: { lte: recordedAt }, AND: [{ OR: [{ validTo: null }, { validTo: { gte: recordedAt } }] }, { OR: [{ enterpriseId: null }, { enterpriseId: vehicle.enterpriseId }] }, { OR: [{ vehicles: { none: {} } }, { vehicles: { some: { vehicleId: vehicle.id } } }] }] } });

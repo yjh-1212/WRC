@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators';
 import { AuthUser } from '../auth/auth.types';
@@ -29,6 +29,8 @@ export class SafetyController {
   updateFence(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateFenceDto) { return this.safety.updateFence(user, id, dto); }
   @Patch('fences/:id/status') @RequirePermissions('safety:fence:write')
   setFenceStatus(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: FenceStatusDto) { return this.safety.setFenceStatus(user, id, dto.active); }
+  @Delete('fences/:id') @RequirePermissions('safety:fence:write')
+  deleteFence(@CurrentUser() user: AuthUser, @Param('id') id: string) { return this.safety.deleteFence(user, id); }
 
   @Get('accidents') @RequirePermissions('safety:accident:read')
   accidents(@CurrentUser() user: AuthUser, @Query() query: SafetyQueryDto) { return this.safety.accidents(user, query); }
