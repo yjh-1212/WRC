@@ -35,7 +35,16 @@ async function bootstrap() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-eval'", "'unsafe-inline'", 'https://webapi.amap.com', 'https://jsapi.amap.com', 'https://restapi.amap.com'],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-eval'",
+          "'unsafe-inline'",
+          'https://webapi.amap.com',
+          'https://jsapi.amap.com',
+          // JSAPI 2.0 loads WebGL/plugin bundles from this runtime CDN.
+          'https://jsapi-service.amap.com',
+          'https://restapi.amap.com',
+        ],
         workerSrc: ["'self'", 'blob:'],
         childSrc: ["'self'", 'blob:'],
         imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
