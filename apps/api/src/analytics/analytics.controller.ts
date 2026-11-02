@@ -1,13 +1,14 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, RequirePermissions } from '../auth/auth.decorators';
 import { AuthUser } from '../auth/auth.types';
-import { AnalyticsQueryDto, CreateAppealDto, CreateEvaluationTaskDto, CreateReportDto, ReviewAppealDto, SaveReconstructionDto, UpdateIndicatorDto, UpdateReportDto, UpdateRuleDto } from './dto';
+import { AnalyticsQueryDto, CreateAppealDto, CreateEvaluationTaskDto, CreateReportDto, ReportQueryDto, ReviewAppealDto, SaveReconstructionDto, UpdateIndicatorDto, UpdateRuleDto } from './dto';
 import { AnalyticsService } from './analytics.service';
+import { CityAnalysisService } from './city-analysis.service';
 
 @ApiTags('分析研判') @ApiBearerAuth() @Controller('analytics')
 export class AnalyticsController {
-  constructor(private analytics: AnalyticsService) {}
+  constructor(private analytics: AnalyticsService, private city:CityAnalysisService) {}
 
   @Get('options') @RequirePermissions('analytics:operation:read') options(@CurrentUser() user: AuthUser) { return this.analytics.options(user); }
   @Get('operations') @RequirePermissions('analytics:operation:read') operations(@CurrentUser() user: AuthUser, @Query() query: AnalyticsQueryDto) { return this.analytics.operationAnalysis(user, query); }
@@ -21,8 +22,8 @@ export class AnalyticsController {
   @Patch('evaluation/indicators/:id') @RequirePermissions('analytics:evaluation:config') updateIndicator(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateIndicatorDto) { return this.analytics.updateIndicator(user, id, dto); }
   @Patch('evaluation/rules/:id') @RequirePermissions('analytics:evaluation:config') updateRule(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateRuleDto) { return this.analytics.updateRule(user, id, dto); }
   @Get('evaluation/tasks') @RequirePermissions('analytics:evaluation:read') evaluationTasks(@CurrentUser() user: AuthUser, @Query() query: AnalyticsQueryDto) { return this.analytics.evaluationTasks(user, query); }
-  @Post('evaluation/tasks') @RequirePermissions('analytics:evaluation:generate') createEvaluationTask(@CurrentUser() user: AuthUser, @Body() dto: CreateEvaluationTaskDto) { return this.analytics.createEvaluationTask(user, dto); }
-  @Post('evaluation/tasks/:id/publish') @RequirePermissions('analytics:evaluation:publish') publishEvaluationTask(@CurrentUser() user: AuthUser, @Param('id') id: string) { return this.analytics.publishEvaluationTask(user, id); }
+  @Post('evaluation/tasks') @RequirePermissions('analytics:evaluation:generate') createEvaluationTask(@CurrentUser() user: AuthUser, @Body() dto: CreateEvaluationTaskDto) { if(user.accountLevel==='CITY')throw new BadRequestException('请在企业评价页面按有效规则创建评价批次');return this.analytics.createEvaluationTask(user, dto); }
+  @Post('evaluation/tasks/:id/publish') @RequirePermissions('analytics:evaluation:publish') publishEvaluationTask(@CurrentUser() user: AuthUser, @Param('id') id: string) { if(user.accountLevel==='CITY')throw new BadRequestException('请在企业评价详情中完成数据核对和复核后发布');return this.analytics.publishEvaluationTask(user, id); }
   @Get('evaluations') @RequirePermissions('analytics:evaluation:read') evaluations(@CurrentUser() user: AuthUser, @Query() query: AnalyticsQueryDto) { return this.analytics.evaluations(user, query); }
   @Get('evaluations/:id') @RequirePermissions('analytics:evaluation:read') evaluation(@CurrentUser() user: AuthUser, @Param('id') id: string) { return this.analytics.evaluation(user, id); }
   @Post('evaluations/:id/appeals') @RequirePermissions('analytics:evaluation:appeal') appeal(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CreateAppealDto) { return this.analytics.createAppeal(user, id, dto); }
@@ -32,9 +33,9 @@ export class AnalyticsController {
   @Get('profiles') @RequirePermissions('analytics:profile:read') profiles(@CurrentUser() user: AuthUser, @Query() query: AnalyticsQueryDto) { return this.analytics.profiles(user, query); }
   @Get('profiles/:enterpriseId') @RequirePermissions('analytics:profile:read') profile(@CurrentUser() user: AuthUser, @Param('enterpriseId') enterpriseId: string) { return this.analytics.profile(user, enterpriseId); }
 
-  @Get('reports') @RequirePermissions('analytics:report:read') reports(@CurrentUser() user: AuthUser, @Query() query: AnalyticsQueryDto) { return this.analytics.reports(user, query); }
+  @Get('reports/options') @RequirePermissions('analytics:report:read') reportOptions(@CurrentUser() user: AuthUser) { return this.analytics.reportOptions(user); }
+  @Get('reports') @RequirePermissions('analytics:report:read') reports(@CurrentUser() user: AuthUser, @Query() query: ReportQueryDto) { return this.analytics.reports(user, query); }
   @Get('reports/:id') @RequirePermissions('analytics:report:read') report(@CurrentUser() user: AuthUser, @Param('id') id: string) { return this.analytics.report(user, id); }
-  @Post('reports') @RequirePermissions('analytics:report:generate') createReport(@CurrentUser() user: AuthUser, @Body() dto: CreateReportDto) { return this.analytics.createReport(user, dto); }
-  @Patch('reports/:id') @RequirePermissions('analytics:report:generate') updateReport(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateReportDto) { return this.analytics.updateReport(user, id, dto); }
+  @Post('reports') @RequirePermissions('analytics:report:generate') createReport(@CurrentUser() user: AuthUser, @Body() dto: CreateReportDto) { return user.accountLevel==='CITY'?this.city.createReport(user,{...dto,from:dto.periodStart,to:dto.periodEnd}):this.analytics.createReport(user, dto); }
   @Get('reports/:id/export') @RequirePermissions('analytics:report:export') exportReport(@CurrentUser() user: AuthUser, @Param('id') id: string) { return this.analytics.exportReport(user, id); }
 }

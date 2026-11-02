@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#06111b" />
+    <title>无人车监管空间引擎底座</title>
+  </head>
+  <body>
+    <div id="app">
+      <div id="cesiumContainer" class="map-stage"></div>
+      <div class="screen-vignette"></div>
+
+      <header class="engine-header">
+        <div class="engine-brand">
+          <span class="brand-kicker">AUTONOMOUS VEHICLE GEO ENGINE</span>
+          <strong>无人车监管空间引擎底座</strong>
+        </div>
+        <div class="engine-status">
+          <span id="engineStatus">INITIALIZING</span>
+          <span id="cameraHeight">H --</span>
+          <span id="cursorCoord">--, --</span>
+        </div>
+      </header>
+
+      <aside class="engine-tools">
+        <label>
+          <span>底图</span>
+          <select id="basemapSelect">
+            <option value="amap-tech">高德科技暗色</option>
+            <option value="amap-road">高德道路</option>
+            <option value="amap-satellite">高德卫星 + 注记</option>
+            <option value="osm">OSM</option>
+            <option value="custom">自定义 XYZ</option>
+          </select>
+        </label>
+        <details>
+          <summary>图层</summary>
+          <label><input type="checkbox" data-layer="admin" checked /> 行政边界</label>
+          <label><input type="checkbox" data-layer="routes" checked /> 路线</label>
+          <label><input type="checkbox" data-layer="nodes" checked /> 节点</label>
+          <label><input type="checkbox" data-layer="labels" checked /> 标签</label>
+          <label><input type="checkbox" data-layer="objects" checked /> 实时对象</label>
+          <label><input type="checkbox" data-layer="heat" checked /> 热力</label>
+          <label><input type="checkbox" data-layer="columns" checked /> 光柱</label>
+          <label><input type="checkbox" data-layer="scans" checked /> 扫描</label>
+        </details>
+      </aside>
+
+      <nav class="camera-nav" aria-label="地图导航">
+        <button id="northBtn" title="指北">N</button>
+        <button data-camera="tilt-up" title="抬头">▲</button>
+        <button data-camera="left" title="左旋">◀</button>
+        <button data-camera="right" title="右旋">▶</button>
+        <button data-camera="tilt-down" title="低头">▼</button>
+        <button data-camera="zoom-in" title="放大">＋</button>
+        <button data-camera="zoom-out" title="缩小">－</button>
+      </nav>
+
+      <div class="bottom-toolbar">
+        <button id="overviewBtn">全览</button>
+        <button id="topDownBtn">俯视</button>
+        <button id="followBtn">跟随</button>
+        <button id="orbitBtn">环绕</button>
+        <button id="modeBtn">2D / 3D</button>
+      </div>
+
+      <div id="creditContainer" class="credit-container"></div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

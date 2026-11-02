@@ -3,12 +3,15 @@ import { Type } from 'class-transformer';
 import { IsDateString, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class ArchivePageQueryDto {
+  @IsOptional() @IsString() workspaceId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() q?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() status?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() manufacturerId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() modelId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() onlineStatus?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() vehicleType?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() operationScene?: string;
   @ApiPropertyOptional({ default: 'updatedAt' }) @IsOptional() @IsIn(['name', 'createdAt', 'updatedAt', 'expiresAt']) sort = 'updatedAt';
   @ApiPropertyOptional({ default: 'desc' }) @IsOptional() @IsIn(['asc', 'desc']) order: 'asc' | 'desc' = 'desc';
   @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
@@ -49,6 +52,9 @@ export class CreateVehicleDto {
   @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() organizationId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() color?: string;
+  @ApiPropertyOptional() @IsOptional() @IsIn(['DELIVERY', 'SANITATION', 'PATROL', 'RETAIL', 'SHUTTLE']) vehicleType?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() operationScene?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() upperEquipment?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() manufactureDate?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() serviceStartDate?: string;
 }

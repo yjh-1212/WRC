@@ -1,14 +1,17 @@
 <script setup lang="ts">
+import QueryPanel from '../components/QueryPanel.vue';
+import QueryField from '../components/QueryField.vue';
+import ListPanel from '../components/ListPanel.vue';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { BadgeCheck, FileCheck2, MoreHorizontal, Plus, RefreshCw, Search } from 'lucide-vue-next';
+import { BadgeCheck, FileCheck2, MoreHorizontal, Plus, Search } from 'lucide-vue-next';
 import { api } from '../api';
 import PageHeader from '../components/PageHeader.vue';
 import { useSessionStore } from '../stores/session';
 import type { PageData } from '../types';
 
-const route=useRoute(),session=useSessionStore(),rows=ref<any[]>([]),total=ref(0),loading=ref(false),error=ref('');
+const route=useRoute(),router=useRouter(),session=useSessionStore(),rows=ref<any[]>([]),total=ref(0),loading=ref(false),error=ref('');
 const q=ref(String(route.query.q??'')),status=ref(''),page=ref(1),pageSize=20,drawer=ref(false),detail=ref<any>(null),detailLoading=ref(false);
 const dialog=ref(false),saving=ref(false),editingId=ref(''),options=reactive<{enterprises:any[];vehicles:any[];licenses:any[]}>({enterprises:[],vehicles:[],licenses:[]});
 const licenseDialog=ref(false),licenseSaving=ref(false);
@@ -16,11 +19,11 @@ const form=reactive<any>({title:'',enterpriseNameSnapshot:'',creditCodeSnapshot:
 const licenseForm=reactive({vehicleId:'',businessNo:'',licenseNo:'',issuedAt:'',expiresAt:'',remark:''});
 let timer:number|undefined;
 
-const type=computed(()=>route.path.includes('onboarding')?'ENTERPRISE_ONBOARDING':route.path.includes('road-tests')?'ROAD_TEST':route.path.includes('renewal')?'LICENSE_RENEWAL':'');
+const type=computed({get:()=>String(route.query.type??(route.path.includes('onboarding')?'ENTERPRISE_ONBOARDING':route.path.includes('road-tests')?'ROAD_TEST':route.path.includes('renewal')?'LICENSE_RENEWAL':'')),set:(value:string)=>router.replace({query:{...route.query,type:value||undefined}})});
 const isEnterprise=computed(()=>session.user?.portal==='ENTERPRISE');
 const canWrite=computed(()=>isEnterprise.value&&session.user?.permissions.includes('admission:application:write'));
 const canIssue=computed(()=>session.user?.permissions.includes('admission:license:issue'));
-const title=computed(()=>type.value==='ENTERPRISE_ONBOARDING'?'企业入驻':type.value==='ROAD_TEST'?'路测申请':type.value==='LICENSE_RENEWAL'?(isEnterprise.value?'续期申请':'续期管理'):'我的申请');
+const title=computed(()=>type.value==='ENTERPRISE_ONBOARDING'?'企业入驻':type.value==='ROAD_TEST'?'路测申请':type.value==='LICENSE_RENEWAL'?(isEnterprise.value?'续期申请':'续期管理'):(isEnterprise.value?'我的申请':'申请管理'));
 const description=computed(()=>type.value==='ENTERPRISE_ONBOARDING'?'提交并跟踪企业主体准入材料。':type.value==='ROAD_TEST'?'管理测试车辆、路线、计划与安全措施。':type.value==='LICENSE_RENEWAL'?'围绕现有牌照提交续期并跟踪审核结果。':'统一查看本企业各类申请及当前处理节点。');
 const typeLabel=(value:string)=>({ENTERPRISE_ONBOARDING:'企业入驻',ROAD_TEST:'路测申请',LICENSE_RENEWAL:'牌照续期'} as any)[value]??value;
 const statusLabel=(value:string)=>({DRAFT:'草稿',IN_REVIEW:'审批中',RETURNED:'退回补正',APPROVED:'已通过',REJECTED:'已驳回',COMPLETED:'已办结'} as any)[value]??value;
@@ -40,12 +43,26 @@ async function openDetail(row:any){drawer.value=true;detailLoading.value=true;tr
 function command(row:any,action:string){if(action==='detail')openDetail(row);if(action==='edit')openForm(row);if(action==='submit')submit(row)}
 function openLicense(){const vehicle=detail.value?.vehicles?.[0]?.vehicle;Object.assign(licenseForm,{vehicleId:vehicle?.id??'',businessNo:`LIC-BIZ-${new Date().getFullYear()}-${String(total.value+28).padStart(3,'0')}`,licenseNo:`浙杭无配${String(total.value+28).padStart(3,'0')}`,issuedAt:new Date().toISOString().slice(0,10),expiresAt:`${new Date().getFullYear()+1}-12-31`,remark:`来源申请 ${detail.value?.businessNo}`});licenseDialog.value=true}
 async function issueLicense(){if(!licenseForm.vehicleId||!licenseForm.businessNo||!licenseForm.licenseNo||!licenseForm.issuedAt||!licenseForm.expiresAt)return ElMessage.warning('请完整填写发牌信息');licenseSaving.value=true;try{await api(`/admission/applications/${detail.value.id}/issue-license`,{method:'POST',body:JSON.stringify(licenseForm)});ElMessage.success('牌照已发放并写入车辆档案');licenseDialog.value=false;await openDetail({id:detail.value.id});await load()}catch(reason){ElMessage.error(reason instanceof Error?reason.message:'牌照发放失败')}finally{licenseSaving.value=false}}
+
+function resetQueryFilters() {
+  q.value = '';
+  type.value = '';
+  status.value = '';
+  page.value = 1;
+  load();
+}
 </script>
 
 <template>
-  <PageHeader :title="title" :description="description" :count="total"><el-button :icon="RefreshCw" @click="load">刷新</el-button><el-button v-if="canWrite&&type" type="primary" :icon="Plus" @click="openForm()">新建{{typeLabel(type)}}</el-button></PageHeader>
-  <div class="table-toolbar"><el-input v-model="q" :prefix-icon="Search" clearable placeholder="搜索申请名称、编号或企业" aria-label="搜索申请"/><el-select v-model="status" clearable placeholder="全部状态" aria-label="申请状态"><el-option label="草稿" value="DRAFT"/><el-option label="审批中" value="IN_REVIEW"/><el-option label="退回补正" value="RETURNED"/><el-option label="已通过" value="APPROVED"/><el-option label="已驳回" value="REJECTED"/><el-option label="已办结" value="COMPLETED"/></el-select><el-button v-if="q||status" text @click="q='';status=''">清除筛选</el-button></div>
-  <div v-if="error" class="error-state"><strong>申请列表暂时无法加载</strong><span>{{error}}</span><el-button @click="load">重试</el-button></div>
+  <PageHeader :title="title" :description="description" :count="total" />
+  <QueryPanel :loading="loading" @search="load" @reset="resetQueryFilters">
+<QueryField label="关键词" keyword><el-input v-model="q" :prefix-icon="Search" clearable placeholder="搜索申请名称、编号或企业" aria-label="搜索申请"/></QueryField>
+<QueryField label="申请"><el-select aria-label="申请" v-model="type" clearable placeholder="全部申请"><el-option label="企业入驻" value="ENTERPRISE_ONBOARDING"/><el-option label="路测申请" value="ROAD_TEST"/><el-option label="许可续期" value="LICENSE_RENEWAL"/></el-select></QueryField>
+<QueryField label="申请状态"><el-select v-model="status" clearable placeholder="全部状态" aria-label="申请状态"><el-option label="草稿" value="DRAFT"/><el-option label="审批中" value="IN_REVIEW"/><el-option label="退回补正" value="RETURNED"/><el-option label="已通过" value="APPROVED"/><el-option label="已驳回" value="REJECTED"/><el-option label="已办结" value="COMPLETED"/></el-select></QueryField>
+</QueryPanel>
+<ListPanel :title="(title) + '列表'" :total="error ? undefined : (total)">
+<template #actions><el-button v-if="canWrite&&type" type="primary" :icon="Plus" @click="openForm()">新建{{typeLabel(type)}}</el-button></template>
+<div v-if="error" class="error-state"><strong>申请列表暂时无法加载</strong><span>{{error}}</span><el-button @click="load">重试</el-button></div>
   <el-table v-else v-loading="loading" :data="rows" row-key="id" empty-text="暂无符合条件的申请">
     <el-table-column label="申请" min-width="260"><template #default="{row}"><button class="table-link" @click="openDetail(row)"><strong>{{row.title}}</strong><span>{{row.businessNo}}</span></button></template></el-table-column>
     <el-table-column v-if="!type" label="类型" width="120"><template #default="{row}">{{typeLabel(row.applicationType)}}</template></el-table-column>
@@ -58,13 +75,15 @@ async function issueLicense(){if(!licenseForm.vehicleId||!licenseForm.businessNo
   </el-table>
   <div class="pagination-row"><span>当前显示 {{rows.length}} / {{total}}</span><el-pagination v-model:current-page="page" :page-size="pageSize" :total="total" layout="prev, pager, next"/></div>
 
-  <el-dialog v-model="dialog" :title="`${editingId?'编辑':'新建'}${typeLabel(type)}`" width="760px" destroy-on-close><p class="dialog-note">先保存草稿可稍后继续；提交审批后，需等待退回补正才可再次编辑。</p><div class="form-grid"><el-form-item label="申请名称" required class="form-span-2"><el-input v-model="form.title"/></el-form-item>
+
+</ListPanel>
+<el-dialog v-model="dialog" :title="`${editingId?'编辑':'新建'}${typeLabel(type)}`" width="760px" destroy-on-close><p class="dialog-note">先保存草稿可稍后继续；提交审批后，需等待退回补正才可再次编辑。</p><div class="form-grid"><el-form-item label="申请名称" required class="form-span-2"><el-input v-model="form.title"/></el-form-item>
     <template v-if="type==='ENTERPRISE_ONBOARDING'"><el-form-item label="企业名称" required><el-input v-model="form.enterpriseNameSnapshot"/></el-form-item><el-form-item label="统一社会信用代码" required><el-input v-model="form.creditCodeSnapshot"/></el-form-item><el-form-item label="法定代表人" required><el-input v-model="form.legalRepresentative"/></el-form-item><el-form-item label="联系人" required><el-input v-model="form.contactName"/></el-form-item><el-form-item label="联系电话" required><el-input v-model="form.contactPhone"/></el-form-item><el-form-item label="注册地址" required><el-input v-model="form.registeredAddress"/></el-form-item><el-form-item label="运营方案" required class="form-span-2"><el-input v-model="form.operationPlan" type="textarea" :rows="3"/></el-form-item><el-form-item label="资质材料说明" required class="form-span-2"><el-input v-model="form.qualificationSummary" type="textarea" :rows="3"/></el-form-item></template>
     <template v-if="type==='ROAD_TEST'"><el-form-item label="开始日期" required><el-date-picker v-model="form.roadTestStartAt" value-format="YYYY-MM-DD" type="date"/></el-form-item><el-form-item label="结束日期" required><el-date-picker v-model="form.roadTestEndAt" value-format="YYYY-MM-DD" type="date"/></el-form-item><el-form-item label="测试车辆" required class="form-span-2"><el-select v-model="form.vehicleIds" multiple :multiple-limit="1" filterable placeholder="选择本企业车辆（本阶段每次申请 1 辆）"><el-option v-for="item in options.vehicles" :key="item.id" :label="`${item.name} · ${item.businessNo}`" :value="item.id"/></el-select></el-form-item><el-form-item label="测试路线" required class="form-span-2"><el-input v-model="form.roadTestRoute" type="textarea" :rows="2"/></el-form-item><el-form-item label="测试计划" required class="form-span-2"><el-input v-model="form.testPlan" type="textarea" :rows="3"/></el-form-item><el-form-item label="安全保障措施" required class="form-span-2"><el-input v-model="form.safetyMeasures" type="textarea" :rows="3"/></el-form-item></template>
     <template v-if="type==='LICENSE_RENEWAL'"><el-form-item label="目标牌照" required class="form-span-2"><el-select v-model="form.targetLicenseId" filterable placeholder="选择待续期牌照"><el-option v-for="item in options.licenses" :key="item.id" :label="`${item.licenseNo} · ${item.vehicle.name} · 有效至 ${date(item.expiresAt)}`" :value="item.id"/></el-select></el-form-item><el-form-item label="申请有效期至" required><el-date-picker v-model="form.requestedExpiresAt" value-format="YYYY-MM-DD" type="date"/></el-form-item><el-form-item label="续期原因" required class="form-span-2"><el-input v-model="form.renewalReason" type="textarea" :rows="4"/></el-form-item></template>
   </div><template #footer><el-button @click="dialog=false">取消</el-button><el-button :loading="saving" @click="save(false)">保存草稿</el-button><el-button type="primary" :loading="saving" @click="save(true)">保存并提交</el-button></template></el-dialog>
 
-  <el-drawer v-model="drawer" size="min(760px,96vw)" destroy-on-close><template #header><div class="archive-drawer-title"><div><span>{{detail?.businessNo||'申请详情'}}</span><h2>{{detail?.title||'加载中'}}</h2></div><el-tag v-if="detail" effect="plain" :type="statusType(detail.status)">{{statusLabel(detail.status)}}</el-tag></div></template><div v-loading="detailLoading" v-if="detail"><div class="workflow-callout"><div><FileCheck2 :size="18"/><span>当前处理</span><strong>{{detail.currentNodeName||statusLabel(detail.status)}}</strong></div><div v-if="detail.result"><BadgeCheck :size="18"/><span>审批结果</span><strong>{{detail.result.documentNo}}</strong></div></div>
+  <el-drawer v-model="drawer" size="760px" destroy-on-close><template #header><div class="archive-drawer-title"><div><span>{{detail?.businessNo||'申请详情'}}</span><h2>{{detail?.title||'加载中'}}</h2></div><el-tag v-if="detail" effect="plain" :type="statusType(detail.status)">{{statusLabel(detail.status)}}</el-tag></div></template><div v-loading="detailLoading" v-if="detail"><div class="workflow-callout"><div><FileCheck2 :size="18"/><span>当前处理</span><strong>{{detail.currentNodeName||statusLabel(detail.status)}}</strong></div><div v-if="detail.result"><BadgeCheck :size="18"/><span>审批结果</span><strong>{{detail.result.documentNo}}</strong></div></div>
     <dl class="detail-grid"><div><dt>申请类型</dt><dd>{{typeLabel(detail.applicationType)}}</dd></div><div><dt>所属企业</dt><dd>{{detail.enterprise?.name||detail.enterpriseNameSnapshot}}</dd></div><div><dt>提交时间</dt><dd>{{date(detail.submittedAt)}}</dd></div><div><dt>办结时间</dt><dd>{{date(detail.completedAt)}}</dd></div><template v-if="detail.applicationType==='ROAD_TEST'"><div><dt>测试时间</dt><dd>{{date(detail.roadTestStartAt)}} 至 {{date(detail.roadTestEndAt)}}</dd></div><div><dt>测试车辆</dt><dd>{{detail.vehicles.map((item:any)=>item.vehicle.name).join('、')}}</dd></div><div class="detail-span-2"><dt>测试路线</dt><dd>{{detail.roadTestRoute}}</dd></div><div class="detail-span-2"><dt>测试计划</dt><dd>{{detail.testPlan}}</dd></div><div class="detail-span-2"><dt>安全措施</dt><dd>{{detail.safetyMeasures}}</dd></div></template><template v-if="detail.applicationType==='LICENSE_RENEWAL'"><div><dt>目标牌照</dt><dd>{{detail.targetLicense?.licenseNo}}</dd></div><div><dt>申请有效期至</dt><dd>{{date(detail.requestedExpiresAt)}}</dd></div><div class="detail-span-2"><dt>续期原因</dt><dd>{{detail.renewalReason}}</dd></div></template><template v-if="detail.applicationType==='ENTERPRISE_ONBOARDING'"><div><dt>法定代表人</dt><dd>{{detail.legalRepresentative}}</dd></div><div><dt>联系人</dt><dd>{{detail.contactName}} · {{detail.contactPhone}}</dd></div><div class="detail-span-2"><dt>运营方案</dt><dd>{{detail.operationPlan}}</dd></div><div class="detail-span-2"><dt>资质说明</dt><dd>{{detail.qualificationSummary}}</dd></div></template></dl>
     <div class="subsection-title"><strong>审批轨迹</strong><span>{{detail.approvalHistories.length}} 条记录</span></div><el-timeline><el-timeline-item v-for="item in detail.approvalHistories" :key="item.id" :timestamp="`${date(item.createdAt)} · ${item.actorName}`" placement="top"><strong>{{({SUBMIT:'提交申请',RESUBMIT:'补正重提',APPROVE_NODE:'节点通过',APPROVE:'审批通过',RETURN:'退回补正',REJECT:'审批驳回',ISSUE_LICENSE:'牌照发放'} as any)[item.action]??item.action}}</strong><p>{{item.nodeName||'业务办结'}} · {{item.comment||'无补充意见'}}</p></el-timeline-item></el-timeline>
     <div v-if="canIssue&&detail.applicationType==='ROAD_TEST'&&detail.status==='APPROVED'&&!detail.result?.licenseId" class="detail-footer"><span>审批已通过，下一步为车辆发牌。</span><el-button type="primary" :icon="BadgeCheck" @click="openLicense">发放牌照</el-button></div>

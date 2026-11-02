@@ -3,13 +3,17 @@ import { Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
 
 export class OperationsQueryDto {
+  @IsOptional() @IsString() workspaceId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() q?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() organizationId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() vehicleId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() regionId?: string;
+  @IsOptional() @IsString() regionType?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() status?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() drivingState?: string;
+  @IsOptional() @IsString() permitStatus?: string;
+  @IsOptional() @IsIn(['all','abnormal']) view?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() from?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() to?: string;
   @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
@@ -31,12 +35,12 @@ export class CreateOperationRegionDto {
   @ApiProperty() @IsString() @IsNotEmpty() businessNo!: string;
   @ApiProperty() @IsString() @IsNotEmpty() name!: string;
   @ApiPropertyOptional() @IsOptional() @IsIn(['OPERATION', 'ROAD_TEST', 'TEMPORARY']) regionType?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string | null;
   @ApiProperty() @IsString() @IsNotEmpty() organizationId!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() approvalResultId?: string;
-  @ApiProperty({ type: [CoordinateDto] }) @IsArray() @ArrayMinSize(3) @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => CoordinateDto) polygon!: CoordinateDto[];
+  @ApiProperty({ type: [CoordinateDto] }) @IsArray() @ArrayMinSize(3) @ArrayMaxSize(1000) @ValidateNested({ each: true }) @Type(() => CoordinateDto) polygon!: CoordinateDto[];
   @ApiProperty() @IsDateString() validFrom!: string;
-  @ApiPropertyOptional() @IsOptional() @IsDateString() validTo?: string;
+  @ApiPropertyOptional() @IsOptional() @IsDateString() validTo?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsIn(['PENDING', 'APPROVED', 'REJECTED']) approvalStatus?: string;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(80) speedLimit?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() allowedHours?: string;
@@ -52,8 +56,8 @@ export class UpdateOperationRegionStatusDto {
 export class TelemetryDto {
   @ApiProperty() @IsString() @IsNotEmpty() vehicleId!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() operationRecordId?: string;
-  @ApiProperty() @Type(() => Number) @IsNumber() longitude!: number;
-  @ApiProperty() @Type(() => Number) @IsNumber() latitude!: number;
+  @ApiProperty() @Type(() => Number) @IsNumber() @Min(-180) @Max(180) longitude!: number;
+  @ApiProperty() @Type(() => Number) @IsNumber() @Min(-90) @Max(90) latitude!: number;
   @ApiProperty() @Type(() => Number) @IsNumber() @Min(0) speed!: number;
   @ApiProperty() @Type(() => Number) @IsInt() @Min(0) @Max(100) battery!: number;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() heading?: number;

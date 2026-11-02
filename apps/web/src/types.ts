@@ -2,12 +2,19 @@ export interface Role { id: string; code: string; name: string }
 export interface AuthUser {
   id: string; username: string; displayName: string; portal: 'REGULATORY' | 'ENTERPRISE';
   organizationId: string | null; enterpriseId: string | null; roles: Role[]; permissions: string[];
+  accountLevel?: 'PROVINCE' | 'CITY' | 'ENTERPRISE' | 'OPERATIONS';
+  workspaceId?: string | null;
+  workspace?: { id: string; cityCode: string; cityName: string; status: string; modules: string[]; validUntil?: string | null } | null;
+  modules?: string[];
+  scopeOrganizationIds?: string[];
+  authVersion?: number;
 }
-export interface MenuItem { id: string; code: string; name: string; path: string; icon?: string; children: MenuItem[] }
+export interface MenuItem { id: string; code: string; name: string; path: string; icon?: string; utility?: boolean; children: MenuItem[] }
 export interface ApiEnvelope<T> { code: number; message: string; data: T; timestamp: string; requestId: string }
 export interface PageData<T> { page: number; pageSize: number; total: number; items: T[] }
 
 export interface OperationPoint {
+  health?: {locationValid:boolean};
   id: string; name: string; businessNo: string; onlineStatus: string; enterpriseId: string; organizationId: string;
   enterprise: { id: string; name: string }; organization: { id: string; name: string };
   model?: { name: string; maxSpeed: number; autonomyLevel: string };
@@ -78,4 +85,4 @@ export interface EvaluationAppeal { id: string; businessNo: string; reason: stri
 export interface EvaluationTask { id: string; businessNo: string; name: string; periodType: string; periodStart: string; periodEnd: string; status: string; createdByName: string; generatedAt: string | null; publishedAt: string | null; organization: { id: string; name: string }; evaluations: EvaluationItem[]; _count: { evaluations: number } }
 export interface EvaluationIndicator { id: string; code: string; name: string; dimension: string; metricKey: string; description: string | null; weight: number; direction: string; status: string; organization: { id: string; name: string }; rules: Array<{ id: string; minValue: number | null; maxValue: number | null; score: number; label: string; orderNo: number }> }
 export interface SafetyProfile { enterprise: { id: string; name: string; businessNo: string; legalRepresentative: string; contactName: string; contactPhone: string }; evaluation: EvaluationItem | null; metrics: { vehicleCount: number; alerts: number; accidents: number; violations: number; offline: number; mileage: number }; dimensions: null | { safety: number; compliance: number; operation: number; onlineStability: number; emergencyResponse: number; autonomy: number }; tags: string[] }
-export interface RegulatoryReport { id: string; businessNo: string; reportType: string; category: string; title: string; periodStart: string; periodEnd: string; status: string; recipient: string | null; generatedByName: string; generatedAt: string; distributedAt: string | null; enterprise: { id: string; name: string } | null; organization: { id: string; name: string }; summary?: Record<string, any> }
+export interface RegulatoryReport { id: string; businessNo: string; reportType: string; category: string; title: string; periodStart: string; periodEnd: string; organizationId?: string; status: string; recipient: string | null; generatedByName: string; generatedAt: string; distributedAt: string | null; enterprise: { id: string; name: string } | null; organization: { id: string; name: string }; summary?: Record<string, any> }

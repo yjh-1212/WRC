@@ -1,0 +1,50 @@
+const assert = require('node:assert/strict');
+const { PrismaClient }=require('@prisma/client');
+const base=process.env.API_URL||'http://127.0.0.1:8080/api', db=new PrismaClient();
+let checks=0;const ids=[],nos=[],resources=[];
+const equal=(a,b)=>{assert.deepEqual(a,b);checks++;};
+async function request(token,path,method='GET',body){const response=await fetch(base+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:body===undefined?undefined:JSON.stringify(body)});const value=await response.json();return {status:response.status,data:value.data,message:value.message};}
+async function login(username){const r=await request(null,'/auth/login','POST',{username,password:process.env.TEST_PASSWORD||'Wrc@2026!'});equal(r.status,200);return r.data.accessToken;}
+async function create(token,body){const result=await request(token,'/oversight/matters','POST',body);equal(result.status,201);ids.push(result.data.id);nos.push(result.data.businessNo);return result.data;}
+(async()=>{try{
+ const province=await login('admin'),jinan=await login('jinan_admin'),qingdao=await login('qingdao_admin'),enterprise=await login('jinan_ent_admin');
+ const options=(await request(province,'/oversight/options')).data;const j=options.workspaces.find(r=>r.cityCode==='370100'),q=options.workspaces.find(r=>r.cityCode==='370200');assert(j&&q);checks++;
+ const prefix='协同优化自动验收 '+Date.now();const standard={kind:'SUPERVISION',title:prefix,description:'仅用于本地自动化验证，核查完成后清理测试事项。',level:'MEDIUM',dueAt:new Date(Date.now()+86400000).toISOString(),workspaceIds:[j.id,q.id],resourceIds:[]};
+ const list=await request(province,'/auth/menus');const entry=list.data.find(r=>r.name==='协同督办');equal(entry.path,'/province/coordination');equal(entry.children,[]);
+ equal((await request(jinan,'/oversight/matters')).status,403);equal((await request(enterprise,'/oversight/city-tasks')).status,403);equal((await request(jinan,'/oversight/related-options?type=VEHICLE')).status,403);
+ equal((await request(province,'/oversight/matters','POST',{...standard,kind:'CROSS_CITY',leadWorkspaceId:'foreign'})).status,400);
+ const cross=await create(province,{...standard,kind:'CROSS_CITY',leadWorkspaceId:j.id});equal(cross.assignments.find(a=>a.workspaceId===j.id).role,'LEAD');equal(cross.assignments.find(a=>a.workspaceId===q.id).role,'SUPPORT');
+ const changed=await request(province,'/oversight/matters/'+cross.id,'PATCH',{leadWorkspaceId:q.id});equal(changed.status,200);equal(changed.data.leadWorkspaceId,q.id);
+ const vehicles=await request(province,'/oversight/related-options?type=VEHICLE&workspaceIds='+q.id);equal(vehicles.status,200);assert(vehicles.data.items.every(r=>r.workspaceId===q.id));checks++;const vehicle=vehicles.data.items[0];assert(vehicle);
+ equal((await request(province,'/oversight/matters','POST',{...standard,workspaceIds:[j.id],relatedType:'VEHICLE',relatedId:vehicle.id})).status,400);
+ const linked=await create(province,{...standard,workspaceIds:[q.id],relatedType:'VEHICLE',relatedId:vehicle.id});equal(linked.related.id,vehicle.id);
+ equal((await request(province,'/oversight/matters','POST',{...standard,template:'SPECIAL_INSPECTION',checklist:[]})).status,400);
+ const checklist=[{id:'network',label:'核查通信状态'},{id:'rectify',label:'核查问题整改'}];const inspection=await create(province,{...standard,template:'SPECIAL_INSPECTION',checklist});equal(inspection.inspectionSummary.reportedCities,0);
+ const ja=inspection.assignments.find(a=>a.workspaceId===j.id),qa=inspection.assignments.find(a=>a.workspaceId===q.id);
+ equal((await request(jinan,'/oversight/city-tasks/'+ja.id)).status,404);
+ equal((await request(province,'/oversight/matters/'+inspection.id+'/actions','POST',{action:'DISPATCH',comment:'自动验收派发'})).status,201);
+ const own=await request(jinan,'/oversight/city-tasks/'+ja.id);equal(own.status,200);equal(own.data.matter.template,'SPECIAL_INSPECTION');equal(own.data.matter.checklist,checklist);assert(!JSON.stringify(own.data).includes(qa.id));checks++;assert(!('assignments' in own.data.matter));checks++;
+ equal((await request(jinan,'/oversight/city-tasks/'+qa.id)).status,404);
+ equal((await request(province,'/oversight/matters/'+inspection.id+'/actions','POST',{action:'CLOSE',comment:'未反馈不得办结'})).status,400);
+ equal((await request(jinan,'/oversight/city-tasks/'+ja.id+'/actions','POST',{action:'RESPOND'})).status,201);
+ const report={enterprises:2,vehicles:10,problemVehicles:2,rectifiedVehicles:1,checks:[{itemId:'network',status:'NORMAL',note:''},{itemId:'rectify',status:'ISSUE',note:'仍有一辆正在整改'}]};
+ const submit=report=>request(jinan,'/oversight/city-tasks/'+ja.id+'/actions','POST',{action:'SUBMIT',feedback:'本市已完成核查，问题车辆持续跟进。',report});
+ equal((await submit(undefined)).status,400);equal((await submit({...report,rectifiedVehicles:3})).status,400);equal((await submit({...report,checks:[report.checks[0]]})).status,400);equal((await submit(report)).status,201);
+ let detail=(await request(province,'/oversight/matters/'+inspection.id)).data;equal(detail.inspectionSummary.vehicles,10);equal(detail.inspectionSummary.reportedCities,1);equal(detail.status,'RESPONDING');
+ const review=await request(province,'/oversight/matters?q='+inspection.businessNo+'&bucket=REVIEW');equal(review.data.total,1);equal(review.data.counts.REVIEW,1);equal(review.data.counts.WAITING,1);
+ equal((await request(province,'/oversight/matters/'+inspection.id+'/actions','POST',{action:'RETURN',workspaceId:j.id,comment:'请补充整改结果'})).status,201);
+ detail=(await request(province,'/oversight/matters/'+inspection.id)).data;equal(detail.inspectionSummary.reportedCities,0);equal(detail.inspectionSummary.vehicles,0);equal((await request(jinan,'/oversight/city-tasks/'+ja.id)).data.report.vehicles,10);
+ equal((await submit({...report,rectifiedVehicles:2})).status,201);
+ equal((await request(province,'/oversight/matters/'+inspection.id+'/actions','POST',{action:'CLOSE',workspaceId:j.id,comment:'本市反馈复核通过'})).status,201);
+ equal((await request(qingdao,'/oversight/city-tasks/'+qa.id+'/actions','POST',{action:'RESPOND'})).status,201);
+ equal((await request(qingdao,'/oversight/city-tasks/'+qa.id+'/actions','POST',{action:'SUBMIT',feedback:'本市已完成核查，车辆状态正常。',report:{enterprises:1,vehicles:8,problemVehicles:0,rectifiedVehicles:0,checks:checklist.map(c=>({itemId:c.id,status:'NORMAL',note:''}))}})).status,201);
+ detail=(await request(province,'/oversight/matters/'+inspection.id)).data;equal(detail.status,'PENDING_REVIEW');equal(detail.inspectionSummary.vehicles,18);equal(detail.inspectionSummary.rectificationRate,100);
+ equal((await request(province,'/oversight/matters/'+inspection.id+'/actions','POST',{action:'CLOSE',comment:'全部地市反馈复核通过'})).status,201);
+ equal((await request(province,'/oversight/matters/'+inspection.id)).data.status,'CLOSED');
+ const resource=await request(province,'/oversight/resources','POST',{workspaceId:j.id,name:prefix+'维修资源',kind:'REPAIR',status:'AVAILABLE',capacity:1});equal(resource.status,201);resources.push(resource.data.id);
+ const emergency=await create(province,{...standard,kind:'EMERGENCY',workspaceIds:[j.id],resourceIds:[resource.data.id]});
+ equal((await request(province,'/oversight/matters/'+emergency.id+'/actions','POST',{action:'DISPATCH',comment:'验证资源占用'})).status,201);equal((await db.provinceResource.findUnique({where:{id:resource.data.id}})).status,'BUSY');
+ const e=emergency.assignments[0];equal((await request(jinan,'/oversight/city-tasks/'+e.id+'/actions','POST',{action:'RESPOND'})).status,201);equal((await request(jinan,'/oversight/city-tasks/'+e.id+'/actions','POST',{action:'SUBMIT',feedback:'已完成保障任务，资源可释放。'})).status,201);equal((await request(province,'/oversight/matters/'+emergency.id+'/actions','POST',{action:'CLOSE',comment:'保障任务复核通过'})).status,201);equal((await db.provinceResource.findUnique({where:{id:resource.data.id}})).status,'AVAILABLE');
+ equal((await request(province,'/oversight/matters?dueFrom=2026-11-10&dueTo=2026-11-01')).status,400);
+ console.log(JSON.stringify({checks,unifiedMenu:true,crossCityRoles:true,structuredInspection:true,returnExcludesSummary:true,cityIsolation:true,linkedScope:true,resourceLifecycle:true}));
+}finally{if(ids.length)await db.$transaction([db.workspaceNotice.deleteMany({where:{OR:nos.map(no=>({content:{contains:no}}))}}),db.provinceAssignment.deleteMany({where:{matterId:{in:ids}}}),db.provinceMatter.deleteMany({where:{id:{in:ids}}})]);if(resources.length)await db.provinceResource.deleteMany({where:{id:{in:resources}}});await db.$disconnect();}})().catch(e=>{console.error(e);process.exitCode=1});

@@ -1,0 +1,76 @@
+const { chromium } = require('playwright');
+const { expect } = require('playwright/test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs'), path = require('node:path');
+const base = process.env.TARGET_URL || 'http://127.0.0.1:5173';
+const password = process.env.TEST_PASSWORD;
+if (!password) throw new Error('Set TEST_PASSWORD for the existing local acceptance account.');
+const output = path.resolve('test-results/province-relief'); fs.mkdirSync(output, { recursive: true });
+let browser, page; const errors = [], errorDetails = [], shaderErrors = [], checks = [];
+const shot = name => page.screenshot({ path: path.join(output, name + '.png') });
+const map = () => page.locator('.pc-relief-map');
+const engine = () => page.locator('.pc-relief-engine');
+async function ready() { await expect(map()).toHaveAttribute('data-map-state', 'ready', { timeout: 30000 }); await expect(map()).toHaveAttribute('data-texture-state', 'ready', { timeout: 30000 }); }
+async function time() { return Number(await engine().getAttribute('data-effect-time')); }
+(async () => {
+  browser = await chromium.launch({ channel: 'chrome', headless: false });
+  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } }); context.setDefaultTimeout(20000);
+  page = await context.newPage(); page.on('pageerror', error => { errors.push(error.message); errorDetails.push({ page: page.url(), stack: error.stack?.replace(/https?:\/\/[^\s)]+/g, url => url.split('?')[0]) }); });
+  page.on('console', message => { if (message.type() === 'error' && /WebGLProgram|Shader Error|VALIDATE_STATUS/.test(message.text())) shaderErrors.push(message.text()); });
+  await page.goto(base + '/login'); await page.getByLabel('账号', { exact: true }).fill('admin'); await page.getByLabel('密码', { exact: true }).fill(password);
+  await page.getByRole('button', { name: '登录', exact: true }).click(); await page.waitForURL('**/province/overview');
+  await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('menuitem', { name: '驾驶舱', exact: true }).click(); await ready();
+  await expect(map()).toHaveAttribute('data-renderer', 'three'); await expect(page.locator('.pc-panel')).toHaveCount(6);
+  const data = await page.evaluate(async () => (await (await fetch('/api/dashboard/regulator/province-cockpit/map', { headers: { Authorization: `Bearer ${sessionStorage.getItem('wrc-access-token')}` } })).json()).data);
+  const positions = data.vehicles.filter(row => Number.isFinite(row.longitude) && Number.isFinite(row.latitude));
+  await expect(page.locator('.pc-relief-key')).toContainText(String(positions.length));
+  await expect.poll(async () => Number(await engine().getAttribute('data-frame-count'))).toBeGreaterThan(35);
+  const savedBackground = await page.evaluate(async () => (await (await fetch('/api/dashboard/regulator/province-cockpit/appearance', { headers: { Authorization: `Bearer ${sessionStorage.getItem('wrc-access-token')}` } })).json()).data.style.background);
+  assert.equal(await page.locator('.province-cockpit').evaluate(element => getComputedStyle(element).getPropertyValue('--pc-bg').trim()), savedBackground);
+  await page.getByRole('button', { name: '查看济南市监管数据', exact: true }).waitFor(); await page.locator('.el-message').waitFor({ state: 'hidden' }); await shot('01-satellite-relief-1920');
+  checks.push('山东卫星纹理、16地市边界及已上报定位；共享外观、6个业务面板和定位计数一致');
+  const before = await time(); await expect.poll(time).toBeGreaterThan(before + .2);
+  await page.getByRole('button', { name: '暂停地图动效', exact: true }).click(); const frozen = await time();
+  await page.waitForTimeout(400); assert.equal(await time(), frozen);
+  await page.getByRole('button', { name: '继续地图动效', exact: true }).click(); await expect.poll(time).toBeGreaterThan(frozen + .15);
+  await page.getByLabel('地市名称', { exact: true }).uncheck(); await expect(page.locator('.pc-relief-city')).toHaveCount(0); await page.getByLabel('地市名称', { exact: true }).check();
+  await page.getByLabel('定位集聚', { exact: true }).uncheck(); await page.getByLabel('卫星影像', { exact: true }).uncheck(); await shot('02-plain-regions');
+  await page.getByLabel('卫星影像', { exact: true }).check(); await page.getByLabel('定位集聚', { exact: true }).check();
+  await page.getByRole('button', { name: '放大地图', exact: true }).click(); await page.getByRole('button', { name: '复位三维地图', exact: true }).click();
+  checks.push('边界/扫描/呼吸动画运行，暂停后时钟冻结、继续后恢复；影像、集聚与标注图层切换可用');
+  for (const width of [1440, 1366]) {
+    await page.setViewportSize({ width, height: width === 1440 ? 900 : 768 });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight)).toBe(true);
+    await page.getByRole('button', { name: '查看济南市监管数据', exact: true }).waitFor(); await shot('03-desktop-' + width);
+  }
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.evaluate(() => { window.__reliefHost = document.querySelector('.pc-relief-engine'); });
+  await page.getByRole('button', { name: '返回全省工作台', exact: true }).click(); await page.waitForURL('**/province/overview');
+  const inactive = await page.evaluate(() => window.__reliefHost.dataset.effectTime); await page.waitForTimeout(350);
+  assert.equal(await page.evaluate(() => window.__reliefHost.dataset.effectTime), inactive, 'Cached, inactive cockpit stops its WebGL animation');
+  await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('menuitem', { name: '驾驶舱', exact: true }).click(); await ready();
+  assert(await page.evaluate(() => window.__reliefHost === document.querySelector('.pc-relief-engine')), 'Return reuses the cached province scene');
+  checks.push('1920/1440/1366大屏无页面溢出；离开页面暂停WebGL，返回复用并恢复场景');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const reduced = await time(); await page.waitForTimeout(400); assert.equal(await time(), reduced);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.getByRole('button', { name: '查看济南市监管数据', exact: true }).click();
+  await expect(page.locator('.pc-native-map[data-level="city"]')).toHaveAttribute('data-map-state', 'ready', { timeout: 45000 });
+  await page.getByRole('navigation', { name: '当前地图层级', exact: true }).getByRole('button', { name: '全省', exact: true }).click(); await ready();
+  checks.push('减少动态效果偏好生效；三维地市下钻进入原生地图，返回省级恢复卫星立体总览');
+  await page.route('**/map/shandong-relief/shandong-satellite.webp', route => route.fulfill({ status: 503, body: 'acceptance texture unavailable' }));
+  await page.reload(); await expect(map()).toHaveAttribute('data-map-state', 'ready'); await expect(map()).toHaveAttribute('data-texture-state', 'error');
+  await expect(page.locator('.pc-relief-city').first()).toBeVisible(); await shot('04-texture-fallback');
+  await page.unroute('**/map/shandong-relief/shandong-satellite.webp'); await page.getByRole('button', { name: '重试影像', exact: true }).click(); await ready();
+  checks.push('卫星资源失败仍有可交互立体区域，重试可恢复影像');
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function(kind, ...options) { return /^(webgl2?|experimental-webgl)$/.test(kind) ? null : original.call(this, kind, ...options); };
+  });
+  await page.reload(); await expect(map()).toHaveAttribute('data-renderer', 'svg'); await expect(map()).toHaveAttribute('data-map-state', 'ready');
+  await expect(page.locator('.pc-relief-flat path')).toHaveCount(16); await expect(page.getByRole('button', { name: '查看济南市监管数据', exact: true }).last()).toBeVisible(); await shot('05-device-fallback');
+  checks.push('设备无WebGL时保留16地市二维备用地图与键盘可操作地市入口');
+  assert.deepEqual(errors, []); assert.deepEqual(shaderErrors, []);
+  const result = { passed: true, positions: positions.length, checks, errors, shaderErrors };
+  fs.writeFileSync(path.join(output, 'acceptance.json'), JSON.stringify(result, null, 2)); console.log(JSON.stringify(result, null, 2));
+})().catch(async error => { console.error(error); if (errorDetails.length) console.error(JSON.stringify(errorDetails)); if (page) await shot('failure').catch(() => {}); process.exitCode = 1; }).finally(async () => { await browser?.close(); });

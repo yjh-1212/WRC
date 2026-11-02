@@ -15,6 +15,10 @@ import { SafetyModule } from './safety/safety.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { HealthController } from './common/health.controller';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { GovernanceModule } from './governance/governance.module';
+import { SaasModule } from './saas/saas.module';
+import { OversightModule } from './oversight/oversight.module';
+import { AgentsModule } from './agents/agents.module';
 
 function validateEnvironment(config: Record<string, unknown>) {
   for (const key of ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET']) {
@@ -40,6 +44,10 @@ function validateEnvironment(config: Record<string, unknown>) {
     SafetyModule,
     AnalyticsModule,
     DashboardModule,
+    GovernanceModule,
+    SaasModule,
+    OversightModule,
+    AgentsModule,
   ],
   controllers: [HealthController],
   providers: [

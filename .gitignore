@@ -5,6 +5,11 @@ dist/
 apps/*/.env
 apps/*/.env.local
 data/*.db*
+data/saas-materials/
+data/admission-materials/
+data/safety-materials/
+tmp/
+*.tsbuildinfo
 !data/regulatory.db
 playwright-report/
 test-results/

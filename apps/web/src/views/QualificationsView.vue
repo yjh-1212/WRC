@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import QueryPanel from '../components/QueryPanel.vue';
+import QueryField from '../components/QueryField.vue';
+import ListPanel from '../components/ListPanel.vue';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { MoreHorizontal, Plus, RefreshCw, Search } from 'lucide-vue-next';
+import { MoreHorizontal, Plus, Search } from 'lucide-vue-next';
 import { api } from '../api';
 import PageHeader from '../components/PageHeader.vue';
 import { useSessionStore } from '../stores/session';
@@ -18,13 +21,27 @@ async function save(){if(!form.businessNo||!form.qualificationType||!form.certif
 async function changeStatus(targets:any[],value:string){try{await Promise.all(targets.map(row=>api(`/archives/qualifications/${row.id}`,{method:'PATCH',body:JSON.stringify({status:value})})));ElMessage.success(`已更新 ${targets.length} 项资质状态`);selected.value=[];await load()}catch(reason){ElMessage.error(reason instanceof Error?reason.message:'状态更新失败')}}
 async function remove(targets:any[]){await ElMessageBox.confirm(`确定删除选中的 ${targets.length} 项资质记录？`,'删除企业资质',{type:'warning',confirmButtonText:'删除'});try{for(const row of targets)await api(`/archives/qualifications/${row.id}`,{method:'DELETE'});ElMessage.success('资质记录已删除');selected.value=[];await load()}catch(reason){ElMessage.error(reason instanceof Error?reason.message:'删除失败')}}
 function command(row:any,action:string){if(action==='edit')openForm(row);if(action==='valid')changeStatus([row],'VALID');if(action==='suspend')changeStatus([row],'SUSPENDED');if(action==='delete')remove([row])}
+
+function resetQueryFilters() {
+  q.value = '';
+  status.value = '';
+  page.value = 1;
+  load();
+}
 </script>
 <template>
-  <PageHeader title="企业资质" description="维护经营许可、无人配送备案等企业准入资料。" :count="total"><el-button :icon="RefreshCw" @click="load">刷新</el-button><el-button v-if="canWrite" type="primary" :icon="Plus" @click="openForm()">新增资质</el-button></PageHeader>
-  <div class="table-toolbar"><el-input v-model="q" :prefix-icon="Search" clearable placeholder="搜索资质类型、证书或编号" aria-label="搜索企业资质"/><el-select v-model="status" clearable placeholder="全部状态" aria-label="资质状态"><el-option label="有效" value="VALID"/><el-option label="已过期" value="EXPIRED"/><el-option label="暂停" value="SUSPENDED"/><el-option label="注销" value="CANCELLED"/></el-select><el-button v-if="q||status" text @click="q='';status=''">清除筛选</el-button></div>
-  <div v-if="selected.length&&canWrite" class="bulk-bar"><strong>已选 {{selected.length}} 项</strong><el-button size="small" @click="changeStatus(selected,'VALID')">设为有效</el-button><el-button size="small" @click="changeStatus(selected,'SUSPENDED')">暂停</el-button><el-button size="small" type="danger" plain @click="remove(selected)">删除</el-button><el-button size="small" text @click="selected=[]">取消选择</el-button></div>
+  <PageHeader title="企业资质" description="维护经营许可、无人配送备案等企业准入资料。" :count="total" />
+  <QueryPanel :loading="loading" @search="load" @reset="resetQueryFilters">
+<QueryField label="关键词" keyword><el-input v-model="q" :prefix-icon="Search" clearable placeholder="搜索资质类型、证书或编号" aria-label="搜索企业资质"/></QueryField>
+<QueryField label="资质状态"><el-select v-model="status" clearable placeholder="全部状态" aria-label="资质状态"><el-option label="有效" value="VALID"/><el-option label="已过期" value="EXPIRED"/><el-option label="暂停" value="SUSPENDED"/><el-option label="注销" value="CANCELLED"/></el-select></QueryField>
+</QueryPanel>
+<ListPanel title="企业资质列表" :total="error ? undefined : (total)">
+<template #actions><el-button v-if="canWrite" type="primary" :icon="Plus" @click="openForm()">新增资质</el-button></template>
+<div v-if="selected.length&&canWrite" class="bulk-bar"><strong>已选 {{selected.length}} 项</strong><el-button size="small" @click="changeStatus(selected,'VALID')">设为有效</el-button><el-button size="small" @click="changeStatus(selected,'SUSPENDED')">暂停</el-button><el-button size="small" type="danger" plain @click="remove(selected)">删除</el-button><el-button size="small" text @click="selected=[]">取消选择</el-button></div>
   <div v-if="error" class="error-state"><strong>企业资质暂时无法加载</strong><span>{{error}}</span><el-button @click="load">重试</el-button></div>
   <el-table v-else v-loading="loading" :data="rows" row-key="id" empty-text="暂无符合条件的企业资质" @selection-change="selected=$event"><el-table-column v-if="canWrite" type="selection" width="46"/><el-table-column label="资质类型" min-width="210"><template #default="{row}"><div class="identity-cell"><strong>{{row.qualificationType}}</strong><span>{{row.businessNo}}</span></div></template></el-table-column><el-table-column label="证书编号" prop="certificateNo" min-width="170"/><el-table-column label="签发单位" prop="issuedBy" min-width="180"/><el-table-column label="有效期"><template #default="{row}">{{date(row.issuedAt)}} 至 {{date(row.expiresAt)}}</template></el-table-column><el-table-column label="状态" width="90"><template #default="{row}"><el-tag size="small" effect="plain" :type="row.status==='VALID'?'success':'info'">{{({VALID:'有效',EXPIRED:'过期',SUSPENDED:'暂停',CANCELLED:'注销'} as any)[row.status]}}</el-tag></template></el-table-column><el-table-column v-if="canWrite" label="" width="58"><template #default="{row}"><el-dropdown trigger="click" @command="(value:string)=>command(row,value)"><el-button text circle aria-label="更多资质操作"><MoreHorizontal :size="17"/></el-button><template #dropdown><el-dropdown-menu><el-dropdown-item command="edit">编辑</el-dropdown-item><el-dropdown-item :command="row.status==='VALID'?'suspend':'valid'">{{row.status==='VALID'?'暂停':'恢复有效'}}</el-dropdown-item><el-dropdown-item command="delete" divided>删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template></el-table-column></el-table>
   <div class="pagination-row"><span>当前显示 {{rows.length}} / {{total}}</span><el-pagination v-model:current-page="page" :page-size="pageSize" :total="total" layout="prev, pager, next"/></div>
-  <el-dialog v-model="dialog" :title="editingId?'编辑企业资质':'新增企业资质'" width="660px" destroy-on-close><p class="dialog-note">证书编号应与证照原件一致，到期时间用于后续预警。</p><div class="form-grid"><el-form-item label="资质档案编号" required><el-input v-model="form.businessNo" placeholder="QUAL-006"/></el-form-item><el-form-item label="资质类型" required><el-input v-model="form.qualificationType" placeholder="道路运输经营许可"/></el-form-item><el-form-item label="证书编号" required><el-input v-model="form.certificateNo"/></el-form-item><el-form-item label="签发单位" required><el-input v-model="form.issuedBy"/></el-form-item><el-form-item label="签发日期" required><el-date-picker v-model="form.issuedAt" value-format="YYYY-MM-DD" type="date"/></el-form-item><el-form-item label="有效期至" required><el-date-picker v-model="form.expiresAt" value-format="YYYY-MM-DD" type="date"/></el-form-item><el-form-item label="附件地址" class="form-span-2"><el-input v-model="form.attachmentUrl" placeholder="可选，填写证照存储地址"/></el-form-item></div><template #footer><el-button @click="dialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存资质</el-button></template></el-dialog>
+
+</ListPanel>
+<el-dialog v-model="dialog" :title="editingId?'编辑企业资质':'新增企业资质'" width="660px" destroy-on-close><p class="dialog-note">证书编号应与证照原件一致，到期时间用于后续预警。</p><div class="form-grid"><el-form-item label="资质档案编号" required><el-input v-model="form.businessNo" placeholder="QUAL-006"/></el-form-item><el-form-item label="资质类型" required><el-input v-model="form.qualificationType" placeholder="道路运输经营许可"/></el-form-item><el-form-item label="证书编号" required><el-input v-model="form.certificateNo"/></el-form-item><el-form-item label="签发单位" required><el-input v-model="form.issuedBy"/></el-form-item><el-form-item label="签发日期" required><el-date-picker v-model="form.issuedAt" value-format="YYYY-MM-DD" type="date"/></el-form-item><el-form-item label="有效期至" required><el-date-picker v-model="form.expiresAt" value-format="YYYY-MM-DD" type="date"/></el-form-item><el-form-item label="附件地址" class="form-span-2"><el-input v-model="form.attachmentUrl" placeholder="可选，填写证照存储地址"/></el-form-item></div><template #footer><el-button @click="dialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存资质</el-button></template></el-dialog>
 </template>

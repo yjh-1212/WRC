@@ -1,0 +1,79 @@
+Use case: ui-mockup.
+Design a NEW alternative high-fidelity desktop UI for the "全省工作台" of the existing "山东无人车监管" platform. The previous concept was rejected. This must be a materially different layout and visual composition, thoughtfully crafted rather than a generic dashboard template.
+Output one extremely crisp Simplified Chinese full application screenshot, straight-on flat view, landscape about1600x1120. All important text and numbers must be legible. No device frame or outside presentation annotations.
+
+DESIGN DIRECTION: A calm professional provincial regulator's daily work inbox. An asymmetric editorial composition: a dominant LEFT WORK COLUMN approximately1040px and a quiet RIGHT CONTEXT RAIL approximately440px, with a generous24px gutter. The user's eye goes to the overdue feedback and review actions. Use white and barely blue-gray, precise horizontal rules, restrained royal blue and warm amber only for overdue items. Avoid a broad KPI strip, big numerical cards, tabular dashboard grids, heavy outlined boxes or repetitive equal cards. Content should feel like organized work, not a statistics display.
+
+VISUAL FOUNDATION: cool near-white page background #f5f7fa, true white work surface, dark navy #172b46 text, slate #7c8ba0 metadata, thin #e6ebf2 dividers, blue #2f6fed for links and important actions. 6px corners, almost invisible shadow, excellent Chinese sans-serif such as PingFang or Microsoft YaHei. Modest20px page title, 16px section titles, 14px task titles, 12px metadata. Lucide-style restrained outline icons. Numbers are tabular but small and secondary. Avoid gradients, dark large screens, maps, decorative gauges, giant heading, wall of equal KPI tiles.
+
+EXISTING HEADER CHROME, not a new product:
+White64px horizontal header. Left small blue delivery-truck mark, "山东无人车监管", smaller "省级监管平台".
+Nav: "全省工作台" active blue underline, "驾驶舱", "地市管理", "全省监测", "协同督办", "统计分析", "AI智能体", "平台管理". Right small circle avatar and "省级管理员".
+Small breadcrumb below "山东省级平台 / 全省工作台".
+IMPORTANT: No second-level page tabs. Never show a "省域运行分析 / 监管报告" strip. Never show 登记分发 or city-duty evaluation scores.
+
+CONTENT TOP aroundy120:
+Left "全省工作台" in compact20px dark navy, beside it a quiet date "2026年10月29日".
+Right one understated outlined button "+ 新建协同事项" and small refresh-icon button. No welcome banner, slogan or generic shortcut tiles.
+Place a small single-line work summary directly beneath title, no box: "当前在办 8项" muted divider "待省级复核 3项" blue divider "逾期未办结 2项" amber. Numbers around15px only. These are not separate cards. No statistic band across the page.
+
+LEFT DOMINANT COLUMN beginsy205:
+One well-proportioned white work surface with very subtle border and16-24px inner padding. It has two sections separated by whitespace and a subtle horizontal rule, rather than a stack of dashboard cards.
+
+UPPER LEFT SECTION: "待省级复核" at16px plus small blue circular count "3". Right a restrained text link "查看全部协同事项 ↗". No tab pills and no table column headers.
+Present THREE rich, spacious task-list rows separated only by thin horizontal rules. Each row has a small unobtrusive outline document/checklist icon at left, readable task title and two evidence/context lines in the middle, and a clear right-aligned "查看反馈 →" link/action. Task descriptions use real concise business language.
+Row1, highest urgency:
+A tiny amber dot and amber outlined "已逾期" tag near title.
+Title "临沂市高风险告警处置反馈"
+Metadata "风险通报 · 临沂市 · 截止10-28 17:00"
+Context line "地市反馈已提交，待省级核对处置结果与佐证材料。"
+Small quiet attachment/evidence text "1/1地市已反馈"
+Right action "查看反馈 →" in blue; only this first row action may use a restrained pale-blue filled button.
+Row2:
+Title "济南市重点路段通行条件核查"
+Metadata "督办任务 · 济南市 · 截止10-29 17:00"
+Context "已提交路段核查说明，等待省级复核。"
+Quiet evidence text "1/1地市已反馈"
+Right blue text "查看反馈 →".
+Row3:
+Title "青岛市配送车辆许可一致性排查"
+Metadata "专项排查 · 青岛市 · 截止10-29 18:00"
+Context "已提交许可比对结果，等待省级复核。"
+Quiet evidence text "1/1地市已反馈"
+Right blue text "查看反馈 →".
+No checkboxes, no score, no row-wide badge fill, no table columns, no automated one-click closure. Make overdue row stand out through a small accent and good hierarchy, not a red panel.
+
+LOWER LEFT SECTION aroundy730:
+Title "地市协同概况", right quiet text link "地市管理 ↗".
+Below show THREE slim city status rows, using a small outlined city/building icon and city name on left, compact semantic counts in the middle, chevron "查看事项 ›" on far right. They are calm list rows, not cards, no header row.
+"济南市" with tiny green dot "已开通"; middle "在办 3项" "逾期 1项" in amber "高风险 2条"; action "查看事项 ›".
+"青岛市" with tiny green dot "已开通"; middle "在办 3项" "无逾期" muted gray "高风险 1条"; action "查看事项 ›".
+"临沂市" with tiny green dot "已开通"; middle "在办 2项" "逾期 1项" amber "高风险 1条"; action "查看事项 ›".
+Rows have light hairline separators,24px spacing, align their counts consistently without resembling a dense data table. Leave good breathing room at bottom.
+
+RIGHT CONTEXT RAIL beginsy205:
+Use a quiet white/very lightly tinted background and fewer borders. This rail should be visually secondary.
+Top section "省域概况".
+Small line "已开通城市 3个".
+Then two side-by-side compact metrics, not tiles:
+"运营企业" value "12 家"; "在册车辆" value "348 辆", values22px at most.
+Below a fine divider and row "上报在线" left, "286 / 348 辆" right, followed by a slim blue horizontal progress bar (not a circular gauge). No claims about verified real-time connectivity or performance scoring.
+A small gray "更新于09:40" below.
+Rail overview total height around200px.
+
+RIGHT BELOW aroundy450:
+Title "风险动态" and small amber count "4".
+Small gray meta "重大1 · 高风险3 · 未闭环".
+A clean VERTICAL EVENT FEED, three items shown from four, each with a tiny red/amber indicator aligned on a vertical hairline, time, title and city.
+1 Time "09:32", small muted-red "重大", title "车辆驶出许可通行范围", meta "济南市 · 济南历城通达物流", quiet link "查看风险 ↗".
+2 Time "09:21", amber "高风险", title "车辆持续离线", meta "青岛市 · 青岛海湾物流", link "查看风险 ↗".
+3 Time "08:56", amber "高风险", title "低电量告警持续未解除", meta "临沂市 · 临沂城区配送", link "查看风险 ↗".
+Keep the feed readable and restrained with12px metadata,14px risk titles. No large severity badges, no red background blocks, no circular score.
+At the end a simple link "查看全部风险 →".
+
+GLOBAL CONSTRAINTS:
+All numbers consistent:3opened cities,12enterprises,348registered vehicles,286reported online,8open coordination matters,3awaiting provincial review,2overdue. City open counts3+3+2=8, overdue1+0+1=2, high risks2+1+1=4.
+No wide metric band and no conventional data table anywhere on this screen. No table header labels like 事项/类型 or 责任地市. Do not replicate the old equal-height side-by-side dashboard panels and bottom full-width table.
+No second-level page-navigation tabs, report distribution, city-duty grades, greeting art, policy slogan, floating robot or decorative map.
+Footer unobtrusively at lower right "页面设计稿 · 示例数据".
+Everything should fit on the canvas with real app proportions. The finished screen should feel editorial, deliberate and work-focused, with a strikingly clear primary work inbox and a quiet contextual rail. Only render the single redesigned screen.

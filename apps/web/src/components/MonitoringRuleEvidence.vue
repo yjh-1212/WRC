@@ -1,0 +1,6 @@
+<script setup lang="ts">
+defineProps<{evidence:any}>();
+const text=(v:any)=>v==null?'未登记':typeof v==='number'?`${v} km/h`:typeof v==='string'?v:Array.isArray(v)?v.map(x=>x.name??x.id).join('、'):'位置与范围快照已保存';
+</script>
+<template><section v-if="evidence?.kind" class="monitoring-rule-evidence"><h3>触发事实与规则依据</h3><dl class="detail-grid"><div><dt>数据时间</dt><dd>{{new Date(evidence.recordedAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})}}</dd></div><div><dt>依据版本</dt><dd>{{evidence.kind==='FENCE'?`${evidence.rule.name} · 版本${evidence.rule.version}`:`${evidence.permit?.licenseNo??'无许可'} · 版本${evidence.permit?.version??'—'}`}}</dd></div><div><dt>实际情况</dt><dd>{{evidence.kind==='FENCE'?`${evidence.actual.speed} km/h`:text(evidence.actual)}}</dd></div><div><dt>核验条件</dt><dd>{{evidence.kind==='FENCE'?`${evidence.expected.speedLimit??'禁行'}${evidence.expected.speedLimit?' km/h':''} · ${evidence.expected.allowedHours||'全天'}`:text(evidence.expected)}}</dd></div></dl><p>保留触发时的定位与规则快照，后续规则调整不改写本次证据。</p></section></template>
+<style scoped>.monitoring-rule-evidence{border:1px solid #e2eaf5;background:#f7faff;border-radius:6px;padding:14px;margin:18px 0}.monitoring-rule-evidence h3{font-size:14px;margin:0 0 12px}.monitoring-rule-evidence p{color:#8293ac;font-size:12px;line-height:1.8;margin:10px 0 0}</style>

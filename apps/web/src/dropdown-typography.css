@@ -1,0 +1,89 @@
+/* Popups are teleported to body, so their typography cannot rely on page inheritance. */
+:root {
+  --dropdown-font-family: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  --dropdown-font-size: 14px;
+}
+
+:is(.el-select__selected-item, .el-select__input, .el-cascader__search-input, select, select option) {
+  font-family: var(--dropdown-font-family);
+  font-size: var(--dropdown-font-size);
+  font-weight: 400;
+}
+
+:is(.el-menu--popup, .el-dropdown-menu, .el-select-dropdown, .el-cascader-panel, .el-autocomplete-suggestion, .el-tree-select__popper, .el-picker-panel) {
+  font-family: var(--dropdown-font-family);
+  font-size: var(--dropdown-font-size);
+  font-weight: 400;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+:is(.el-menu--popup .el-menu-item, .el-menu--popup .el-sub-menu__title, .el-dropdown-menu__item, .el-select-dropdown__item, .el-cascader-node, .el-autocomplete-suggestion li, .el-tree-select__popper .el-tree-node__label) {
+  font-family: var(--dropdown-font-family);
+  font-size: var(--dropdown-font-size);
+  font-weight: 400;
+  letter-spacing: .015em;
+}
+
+.el-dropdown-menu__item {
+  min-height: 36px;
+  line-height: 22px;
+  padding-block: 7px;
+}
+
+.el-select-dropdown__item {
+  height: 36px;
+  line-height: 36px;
+}
+
+:is(.el-dropdown-menu__item, .el-select-dropdown__item, .el-cascader-node, .el-menu--popup .el-menu-item) > :is(span, a) {
+  font-family: inherit;
+  font-size: inherit;
+  letter-spacing: inherit;
+}
+
+:is(.el-select-dropdown__item.is-selected, .el-cascader-node.in-active-path, .el-cascader-node.is-active, .el-menu--popup .el-menu-item.is-active) {
+  font-weight: 500;
+}
+
+.portal-navigation-dropdown .el-menu--popup {
+  min-width: 176px;
+  width: max-content;
+  padding: 6px;
+}
+
+.portal-navigation-dropdown .el-menu--popup .el-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 14px;
+  color: #43536b;
+  line-height: 22px;
+  white-space: nowrap;
+  border-radius: 5px;
+}
+
+.portal-navigation-dropdown .el-menu--popup .el-menu-item svg {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  color: #70829b;
+  stroke-width: 1.7;
+}
+
+.portal-navigation-dropdown .el-menu--popup .el-menu-item:hover,
+.portal-navigation-dropdown .el-menu--popup .el-menu-item:focus {
+  background: #f3f7fd;
+  color: #2868ca;
+}
+
+.portal-navigation-dropdown .el-menu--popup .el-menu-item.is-active {
+  background: #edf4ff;
+  color: #2868ca;
+  font-weight: 500;
+}
+
+.portal-navigation-dropdown .el-menu--popup .el-menu-item:is(:hover, :focus, .is-active) svg {
+  color: currentColor;
+}

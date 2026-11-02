@@ -1,8 +1,9 @@
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
+import { createRequire } from 'node:module';
 import { fencePolygons, headingBetween, pois, regionPolygons, routeForVehicle, samplePath, takeTrack } from './hangzhou-geo';
 
 const prisma = new PrismaClient();
+const bcrypt = createRequire(new URL('../apps/api/package.json', import.meta.url))('bcryptjs');
 
 const phase1Permissions = [
   ['dashboard:view', '查看首页', 'dashboard'],

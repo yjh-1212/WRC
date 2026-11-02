@@ -5,6 +5,7 @@ import { Transform, Type } from 'class-transformer';
 const emptyToUndefined = ({ value }: { value: unknown }) => (value === '' ? undefined : value);
 
 export class PageQueryDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() q?: string;
   @ApiPropertyOptional() @IsOptional() @IsIn(['ACTIVE', 'INACTIVE']) status?: string;
   @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
@@ -53,4 +54,8 @@ export class CreateEnterpriseDto {
   @ApiProperty() @IsString() @IsNotEmpty() creditCode!: string;
   @ApiProperty() @IsString() @IsNotEmpty() organizationId!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() type?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() legalRepresentative?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() contactName?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() contactPhone?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() registeredAddress?: string;
 }

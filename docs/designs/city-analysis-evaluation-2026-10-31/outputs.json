@@ -1,0 +1,35 @@
+{
+  "mode": "builtin-imagegen",
+  "outputs": [
+    {
+      "key": "operations",
+      "title": "运行分析",
+      "file": "01-operations-analysis.png",
+      "source": "C:\\Users\\Lenovo\\.codex\\generated_images\\01a1877d-adbf-7933-84b8-03391ad6347c\\exec-0d273c32-8e53-4f3b-b49a-30add4ffd38d.png"
+    },
+    {
+      "key": "safety",
+      "title": "安全分析",
+      "file": "02-safety-analysis.png",
+      "source": "C:\\Users\\Lenovo\\.codex\\generated_images\\01a1877d-adbf-7933-84b8-03391ad6347c\\exec-a621f513-4212-4163-bbd4-ece285f276ff.png"
+    },
+    {
+      "key": "evaluation",
+      "title": "企业评价",
+      "file": "03-enterprise-evaluation.png",
+      "source": "C:\\Users\\Lenovo\\.codex\\generated_images\\01a1877d-adbf-7933-84b8-03391ad6347c\\exec-de52595e-9b37-4f4e-bae2-214b0612a00d.png"
+    },
+    {
+      "key": "credit",
+      "title": "信用管理",
+      "file": "04-credit-management.png",
+      "source": "C:\\Users\\Lenovo\\.codex\\generated_images\\01a1877d-adbf-7933-84b8-03391ad6347c\\exec-67184766-033d-4c9e-82af-c9dd2a7b47b6.png"
+    },
+    {
+      "key": "reports",
+      "title": "统计报表",
+      "file": "05-statistical-reports.png",
+      "source": "C:\\Users\\Lenovo\\.codex\\generated_images\\01a1877d-adbf-7933-84b8-03391ad6347c\\exec-45c60d34-5850-48d2-9181-78fb93c2a337.png"
+    }
+  ]
+}

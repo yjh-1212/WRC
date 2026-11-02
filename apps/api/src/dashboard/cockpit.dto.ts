@@ -2,6 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsString } from 'class-validator';
 
 export class CockpitQueryDto {
+  @ApiPropertyOptional() @IsOptional() @IsIn(['ALL', 'DELIVERY', 'SANITATION', 'PATROL', 'RETAIL', 'SHUTTLE']) vehicleType?: string;
   @ApiPropertyOptional() @IsOptional() @IsIn(['city', 'district', 'enterprise', 'vehicle']) level?: 'city' | 'district' | 'enterprise' | 'vehicle';
   @ApiPropertyOptional() @IsOptional() @IsString() organizationId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string;

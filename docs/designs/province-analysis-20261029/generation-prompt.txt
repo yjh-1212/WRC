@@ -1,0 +1,34 @@
+Use case: ui-mockup.
+Create one polished, exceptionally legible high-fidelity Simplified Chinese desktop web UI design image for an EXISTING Shandong autonomous delivery vehicle regulatory SaaS, specifically the province-level "省域运行分析" page inside the "统计分析" menu. A full finished application screenshot, flat straight-on, landscape approx 1600x1120 or 1920x1344, no device bezel, no perspective. Professional government enterprise analytics workstation, restrained and precise. Text must be accurate Simplified Chinese, crisp, with numbers aligned and chart labels readable.
+
+STYLE AND SHELL: white 72px horizontal header, pale cool gray #f4f6f9 canvas, white surfaces, thin #e5eaf1 dividers, dark slate #172b46 text, muted #7b8ba0, medium blue #2f6fed active navigation and data, 6-8px corners, minimal shadow. Clean Microsoft YaHei / PingFang Chinese sans serif with tabular numerals. Dense business interface with 24px outer gutters, 16px between sections, modest 18px titles, 13px body. No oversized card typography; no gradients, no glows, no illustrations, no map, no decorative donut charts. Use subtle line icons sparingly.
+
+HEADER: left small blue delivery-truck mark, product "山东无人车监管", subtitle "省级监管平台". Center compact nav: "全省工作台", "驾驶舱", "地市管理", "全省监测", "协同督办", "统计分析", "平台管理". Highlight only "统计分析" with blue underline. Right circular avatar and "省级管理员". Beneath header breadcrumb "省级平台 / 统计分析 / 省域运行分析". Below breadcrumb a small tabs row "省域运行分析" active blue underline and "监管报告" inactive. Do not show any city duty evaluation, grades, scores, city rankings, AI banners or recommendation scoring.
+
+FILTER SECTION around y155: full-width white compact panel. Visible labels and controls in one tidy row: "统计周期" date range "2026-09-29 至 2026-10-28"; shortcut pills "近7日", "近30日" (active), "本月"; "地市" dropdown "全部已开通城市"; "运营企业" dropdown "全部企业"; right blue "查询" and outlined "重置". No vehicle selector at province overview level.
+Next small scope line: left "统计范围：3个已开通城市 · 按运行记录汇总" right "数据截至 2026-10-29 09:00" in gray. Labels do not imply all 16 Shandong cities are opened.
+
+METRIC BAND around y265, only one continuous white band divided by 5 thin vertical dividers, not six giant separate KPI cards. Six equally spaced modest metrics:
+"运行车辆" value "320" unit "辆" secondary "较上期 +6.7%"
+"累计里程" value "128,640" unit "km" secondary "较上期 +12.4%"
+"运行次数" value "8,624" unit "次" secondary "较上期 +9.1%"
+"累计运行时长" value "9,296" unit "h" secondary "较上期 +8.5%"
+"自主运行里程占比" value "96.8" unit "%" secondary "较上期 +0.6个百分点"
+"累计能耗" value "19,296" unit "kWh" secondary "百公里能耗 15.0 kWh"
+Values ~26px, labels 13px, secondary 11px. Blue or neutral changes, no red/green judgment of a city's performance. The autonomous measure is distance ratio, not trip success rate.
+
+PRIMARY ANALYSIS around y395 to720: two charts side by side, width split 65:35, independent white bordered panels of equal height.
+LEFT: title "全省运行趋势" and subtitle "按日汇总 · 里程与上期同周期对比". Header controls segmented "里程" (active), "运行次数", "运行时长", plus tiny "按日". Display a beautiful proper 30-day line chart with only ONE y-axis labeled "里程（km）", y ticks 0 2000 4000 6000 8000, x ticks 09/29 10/04 10/09 10/14 10/19 10/24 10/28. Solid medium blue current-period line, subtle very pale blue area, muted gray-blue dashed prior-period line, same length, plausible daily irregularities between 2600 and5600, modest positive trend. Legend "本期" and "上期同周期". No mixed-unit line and bars on same axis. Include restrained crosshair tooltip at late date: "10月24日", "本期 4,860 km", "上期同周期 4,320 km", "变化 +12.5%". It must not cover chart title.
+RIGHT: title "地市里程对比", subtitle "已开通城市 · 累计里程". 3 horizontal bars, normal city order not rank numbers or medals: "济南市" 56,520 km, "青岛市" 43,760 km, "临沂市" 28,360 km. All bars same medium-blue family with pale gray remainder tracks. Each city label and value easy to read. Tiny shares "43.9%", "34.0%", "22.0%" next to values. Space rows elegantly. Small footer "共3个城市，支持点击查看该市明细". This is operational comparison, not city duty evaluation.
+
+BOTTOM TABLE around y740: full-width white panel titled "地市运行明细". Right small controls search input "搜索地市" and neutral outlined download icon button "导出数据". Secondary contextual line "当前周期 · 3个城市". Dense table light blue-gray header, careful alignment, unit-bearing labels:
+"地市" | "运营企业（家）" | "运行车辆（辆）" | "运行次数（次）" | "累计里程（km）" | "里程占比" | "自主运行里程占比" | "百公里能耗（kWh）" | "操作".
+Data 3 rows:
+"济南市" | 5 | 138 | 3,640 | 56,520 | 43.9% | 97.2% | 14.6 | blue text "查看分析"
+"青岛市" | 4 | 108 | 2,912 | 43,760 | 34.0% | 96.8% | 15.2 | "查看分析"
+"临沂市" | 3 | 74 | 2,072 | 28,360 | 22.0% | 96.0% | 15.5 | "查看分析"
+Summary row muted fill:
+"全省汇总" | 12 | 320 | 8,624 | 128,640 | 100% | 96.8% | 15.0 | "—"
+No checkboxes (there are no bulk actions), no medals, no scores, no badges, no arbitrary ratings. Right align all number cells. Table fits fully within canvas, with all rows visible.
+Bottom small data explanation strip: info icon and "统计口径：运行车辆按周期去重；自主运行里程占比＝自主里程 / 总里程；未上报数据不计为零。" At lower right unobtrusive "页面设计稿 · 示例数据". Preserve sufficient white margins and clean baseline alignment. Everything should feel like one coherent production screen, not a collection of generic dashboard cards.
+Deliver only the image, no annotations outside the screen.

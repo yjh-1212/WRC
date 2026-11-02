@@ -1,0 +1,7 @@
+{
+  "mode": "builtin-imagegen",
+  "intent": "edit",
+  "reason": "事件趋势按日整数统计，替换生成图中的小数观测值",
+  "source": "C:\\Users\\Lenovo\\.codex\\generated_images\\01a1877d-adbf-7933-84b8-03391ad6347c\\exec-696f2c9d-b6c6-4a6f-9717-d6d48dcb6a26.png",
+  "prompt": "Use case: precise-object-edit. Edit this existing complete municipal analysis UI screenshot. Preserve the entire header, logo, filters, right event distribution bars, all bottom enterprise table numbers, colors, text, layout, and dimensions exactly. Change ONLY the plot inside 安全事件趋势 and its legend. Replace its incorrect fractional counts and three continuous lines with ONE cobalt blue daily TOTAL event count line with integer data, visible round markers, no smoothing that suggests fractional observations, a faint area fill. Legend becomes 事件总数. Vertical axis 事件数（起） and integer ticks 0,1,2,3,4. Horizontal axis dates10/01 through10/31 with major ticks10/01,10/05,10/10,10/15,10/20,10/25,10/31 and 日期. Daily data in order Oct1–31 = 0,1,0,3,1,0,1,2,1,0,2,1,1,0,3,1,2,2,0,1,3,2,1,0,2,1,3,2,1,2,3. Total is42: treat all dates as reported days. The line must rise and fall between the integer daily marker positions, with multiple clear zeros and peak3, not use any decimal event counts. Keep summary 事件总数42起、已闭环12起、闭环率28.6% unchanged. Strictly no other changes."
+}

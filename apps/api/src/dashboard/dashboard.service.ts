@@ -22,7 +22,7 @@ const VEHICLE_SELECT = {
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private isSuper(user: AuthUser) { return user.roles.some((role) => role.code === 'SUPER_ADMIN'); }
+  private isSuper(user: AuthUser) { return user.accountLevel === 'PROVINCE' || (!!user.workspaceId && user.accountLevel !== 'OPERATIONS') || (!user.accountLevel && user.roles.some((role) => role.code === 'SUPER_ADMIN')); }
   private has(user: AuthUser, permission: string) { return user.permissions.includes(permission); }
   private organizationRelation(user: AuthUser) {
     return { is: { OR: [{ id: user.organizationId ?? '__none__' }, { parentId: user.organizationId ?? '__none__' }] } };
@@ -140,7 +140,7 @@ export class DashboardService {
     const longestWaitHours = oldestPending ? this.round(longestWaitMs / 3_600_000, 1) : 0;
     return {
       meta: {
-        scopeName: this.isSuper(user) ? '杭州市' : organization?.name ?? '当前组织',
+        scopeName: user.workspace?.cityName ?? (user.accountLevel === 'PROVINCE' ? '山东省' : organization?.name ?? '当前组织'),
         updatedAt: new Date(), highRisk, openWork: openAlerts + openEmergency + pendingApprovals, pendingApprovals,
       },
       metrics: {

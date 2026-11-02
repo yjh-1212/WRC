@@ -1,0 +1,22 @@
+{
+  "provider": "高德地图",
+  "layer": "卫星影像",
+  "attribution": "© 高德地图",
+  "source": "https://www.amap.com/",
+  "tileTemplate": "https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}",
+  "zoom": 8,
+  "tileCount": 28,
+  "projection": "Web Mercator",
+  "retrievedAt": "2026-10-29T17:03:41.401027+00:00",
+  "note": "山东区域卫星瓦片拼接，影像采集日期随瓦片变化，不是实时影像。",
+  "width": 1792,
+  "height": 1024,
+  "bounds": {
+    "west": 113.90625,
+    "east": 123.75,
+    "south": 36.5625,
+    "north": 42.1875
+  },
+  "boundsUnits": "longitude degrees and Mercator latitude degrees",
+  "sha256": "72c971256f100508889e0efb176d52a2c281876826cb6ec35b667b906c05c737"
+}

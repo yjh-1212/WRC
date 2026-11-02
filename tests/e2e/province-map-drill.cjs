@@ -1,0 +1,62 @@
+const { chromium } = require('playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs'), path = require('node:path');
+const base = process.env.TARGET_URL || 'http://127.0.0.1:5173';
+const artifacts = path.resolve('test-results/province-map-drill');
+(async () => {
+  fs.mkdirSync(artifacts, { recursive: true });
+  const browser = await chromium.launch({ headless: process.env.PW_HEADLESS === 'true' }), errors = [];
+  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 }, reducedMotion: 'reduce' });
+  const page = await context.newPage(); page.setDefaultTimeout(30000); page.on('pageerror', e => errors.push(e.message));
+  try {
+    await page.goto(base + '/login', { waitUntil: 'domcontentloaded' }); await page.getByLabel('账号', { exact: true }).fill('admin'); await page.getByLabel('密码', { exact: true }).fill(process.env.TEST_PASSWORD || 'Wrc@2026!'); await page.getByRole('button', { name: '登录', exact: true }).click(); await page.waitForURL('**/province/overview', { waitUntil: 'domcontentloaded' });
+    await page.evaluate(async () => { const { loadAMap } = await import('/src/amap.ts'); const AMap = await loadAMap(), Native = AMap.Map; window.__nativeMapCount = 0; window.__modelRequests = []; AMap.Map = new Proxy(Native, { construct(target, args) { window.__nativeMapOptions = args[1]; const map = Reflect.construct(target, args); window.__nativeMapCount++; window.__nativeMap = map; return map; } }); });
+    const modelRequests = []; page.on('request', request => { if (/\.(gltf|glb)(\?|$)/.test(request.url())) modelRequests.push(new URL(request.url()).pathname); });
+    await page.route('**/api/dashboard/regulator/province-cockpit/appearance', async route => { const response = await route.fetch(), body = await response.json(); body.data.style = { ...body.data.style, cityMarkers: true, labels: true, mapZoomOffset: 0 }; await route.fulfill({ response, json: body }); });
+    const firstStart = Date.now();
+    await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('menuitem', { name: '驾驶舱', exact: true }).click();
+    const ready = async (level, kind) => { await page.locator(`.province-cockpit[data-level="${level}"]`).waitFor(); await page.locator(`.${level === 'province' ? 'pc-relief-map' : 'pc-native-map'}[data-map-state="ready"][data-level="${level}"]${kind ? `[data-kind="${kind}"]` : ''}`).waitFor(); };
+    await ready('province', 'cities'); const firstReadyMs = Date.now() - firstStart;
+    assert.equal(await page.locator('.pc-panel').count(), 6); assert.equal(await page.locator('.pc-map-caption').count(), 0); assert.equal(await page.getByText('正在加载高德地图…', { exact: true }).count(), 0);
+    await page.getByRole('button', { name: '查看济南市监管数据', exact: true }).waitFor(); assert.equal(await page.locator('.pc-relief-map').getAttribute('data-city-count'), '16');
+    assert(Number(await page.locator('.pc-relief-map').getAttribute('data-location-count')) > 0, 'Real reported positions feed the province WebGL scene');
+    await page.screenshot({ path: path.join(artifacts, 'province.png') });
+    await page.getByRole('button', { name: '查看济南市监管数据', exact: true }).click(); await ready('city', 'districts');
+    assert.deepEqual(await page.evaluate(() => ({ mode: window.__nativeMapOptions.viewMode, pitch: window.__nativeMap.getPitch(), rotation: window.__nativeMap.getRotation(), pitchEnable: window.__nativeMapOptions.pitchEnable, rotateEnable: window.__nativeMapOptions.rotateEnable, buildings: window.__nativeMapOptions.showBuildingBlock })), { mode: '2D', pitch: 0, rotation: 0, pitchEnable: false, rotateEnable: false, buildings: false });
+    await page.screenshot({ path: path.join(artifacts, 'city-2d.png') });
+    await page.locator('.amap-city-marker[data-map-kind="districts"]').first().click(); await ready('district', 'enterprises');
+    await page.locator('.amap-city-marker[data-map-kind="enterprises"]').first().click(); await ready('enterprise', 'vehicles');
+    await page.screenshot({ path: path.join(artifacts, 'enterprise.png') });
+    const runningId = await page.evaluate(async () => { const { api } = await import('/src/api.ts'); const query = new URLSearchParams(location.search); query.set('level', 'enterprise'); const data = await api('/dashboard/regulator/province-cockpit/map?' + query); return data.vehicles.find(row => row.onlineStatus === 'ONLINE' && row.drivingState === 'RUNNING')?.id; });
+    assert(runningId, 'Fixture enterprise must contain a running vehicle');
+    await page.evaluate(async id => { const { api } = await import('/src/api.ts'); const query = new URLSearchParams(location.search); query.set('level', 'enterprise'); const data = await api('/dashboard/regulator/province-cockpit/map?' + query); const vehicle = data.vehicles.find(row => row.id === id); window.__runningNo = vehicle.businessNo; }, runningId);
+    await page.locator('.city-ranking-list>button').filter({ hasText: await page.evaluate(() => window.__runningNo) }).click(); await ready('vehicle', 'vehicles');
+    assert.equal(await page.locator('.pc-side').count(), 2, 'Vehicle view must preserve city panels');
+    assert.equal(await page.locator('.pc-panel').count(), 6);
+    await page.waitForFunction(() => document.querySelector('[aria-label="跟随无人车"]')?.getAttribute('aria-pressed') === 'true');
+    await page.waitForFunction(() => window.__nativeMap.getAllOverlays('polyline').some(line => line.getPath().length > 1));
+    await page.locator('.pc-car-hit').click(); await page.getByRole('dialog', { name: '无人车信息', exact: true }).waitFor();
+    await page.screenshot({ path: path.join(artifacts, 'vehicle-popup.png') });
+    assert.equal(await page.evaluate(() => window.__nativeMap.getPitch()), 0, 'Vehicle following must stay in 2D');
+    assert.deepEqual(modelRequests, [], '2D detail maps must not request GLTF/GLB models');
+    const id = new URL(page.url()).searchParams.get('vehicleId'); assert(id);
+    const telemetryUrl = '**/api/dashboard/regulator/province-cockpit/map/vehicles/' + id + '*';
+    let fixes = 0;
+    await page.route(telemetryUrl, async route => { const response = await route.fetch(), body = await response.json(); fixes++; body.data.vehicle = { ...body.data.vehicle, longitude: body.data.vehicle.longitude + .0004 * fixes, latitude: body.data.vehicle.latitude + .0003 * fixes, heartbeatAt: new Date().toISOString(), locationTime: new Date().toISOString(), speed: 12, battery: 75, onlineStatus: 'ONLINE', drivingState: 'RUNNING' }; await route.fulfill({ response, json: body }); });
+    await page.getByRole('dialog', { name: '无人车信息', exact: true }).getByText('12 km/h', { exact: true }).waitFor({ timeout: 12000 });
+    await page.waitForFunction(() => window.__nativeMap.getAllOverlays('polyline').some(line => line.getPath().length > 1), null, { timeout: 12000 });
+    assert.equal(await page.getByRole('button', { name: '跟随无人车', exact: true }).getAttribute('aria-pressed'), 'true');
+    await page.getByRole('button', { name: '关闭车辆信息', exact: true }).click(); await page.getByRole('dialog', { name: '无人车信息', exact: true }).waitFor({ state: 'hidden' });
+    await page.unroute(telemetryUrl);
+    assert.equal(await page.evaluate(() => window.__nativeMapCount), 1, 'All city/vehicle detail levels reuse one native map alongside province relief');
+    await page.getByRole('button', { name: '返回上一级地图', exact: true }).click(); await ready('enterprise', 'vehicles'); assert.equal(await page.locator('.pc-side').count(), 2);
+    await page.getByRole('navigation', { name: '当前地图层级', exact: true }).getByRole('button', { name: '全省', exact: true }).click(); await ready('province', 'cities');
+    await page.getByRole('button', { name: '返回全省工作台', exact: true }).click(); await page.waitForURL('**/province/overview');
+    const returnStart = Date.now(); await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('menuitem', { name: '驾驶舱', exact: true }).click(); await ready('province', 'cities'); const returnReadyMs = Date.now() - returnStart;
+    assert.equal(await page.evaluate(() => window.__nativeMapCount), 1, 'Returning to cockpit must reuse the cached map');
+    await page.setViewportSize({ width: 1440, height: 900 }); await page.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight); await page.screenshot({ path: path.join(artifacts, 'desktop-1440.png') });
+    assert.deepEqual(errors, []); console.log(JSON.stringify({ hierarchy: ['province', 'city', 'district', 'enterprise', 'vehicle'], vehiclePoints: true, vehiclePopup: true, liveTrackFromNewFixes: true, vehicleSidePanels: true, automaticFollow: true, oneNativeMap: true, captionRemoved: true, firstReadyMs, returnReadyMs, errors }));
+  } catch (error) { await page.screenshot({ path: path.join(artifacts, 'failure.png') }); console.error(await page.evaluate(() => ({ width: innerWidth, height: innerHeight, scrollWidth: document.documentElement.scrollWidth, scrollHeight: document.documentElement.scrollHeight, overflow: [...document.querySelectorAll('body *')].map(e => ({ tag: e.tagName, cls: String(e.className).slice(0,90), right: e.getBoundingClientRect().right, bottom: e.getBoundingClientRect().bottom })).filter(e => e.right > innerWidth + 1 || e.bottom > innerHeight + 1).slice(0,8) }))); throw error; }
+  finally { await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });
+

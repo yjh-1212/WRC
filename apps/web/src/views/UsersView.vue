@@ -1,30 +1,52 @@
 <script setup lang="ts">
+import QueryPanel from '../components/QueryPanel.vue';
+import QueryField from '../components/QueryField.vue';
+import ListPanel from '../components/ListPanel.vue';
+import { useRouter } from 'vue-router';
+import { useSessionStore } from '../stores/session';
+import '../saas.css';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '../api'; import type { PageData, Role } from '../types'; import PageHeader from '../components/PageHeader.vue'; import { Plus, RefreshCw, Search, MoreHorizontal } from 'lucide-vue-next';
 interface UserRow { id:string; username:string; displayName:string; email?:string; portal:string; status:string; organization?:{name:string}; enterprise?:{name:string}; roles:Array<{role:Role}>; lastLoginAt?:string }
+const router=useRouter(),session=useSessionStore();const isProvince=computed(()=>session.user?.accountLevel==='PROVINCE');const canCreate=computed(()=>session.user?.permissions.includes('system:user:create'));const canUpdate=computed(()=>session.user?.permissions.includes('system:user:update'));
 const loading=ref(false), error=ref(''), dialog=ref(false), saving=ref(false); const rows=ref<UserRow[]>([]), total=ref(0), selected=ref<UserRow[]>([]), roles=ref<any[]>([]); const q=ref(''), status=ref(''), page=ref(1);
-const form=reactive({username:'',password:'Wrc@2026!',displayName:'',email:'',portal:'REGULATORY',roleIds:[] as string[]});
+const form=reactive({username:'',password:'',displayName:'',email:'',portal:'REGULATORY',roleIds:[] as string[]});
 const filteredRoles=computed(()=>roles.value.filter((r:any)=>r.portal===form.portal)); let timer:number|undefined;
 async function load(){loading.value=true;error.value='';try{const params=new URLSearchParams({page:String(page.value),pageSize:'20'});if(q.value)params.set('q',q.value);if(status.value)params.set('status',status.value);const data=await api<PageData<UserRow>>(`/system/users?${params}`);rows.value=data.items;total.value=data.total;}catch(e){error.value=e instanceof Error?e.message:'加载失败';}finally{loading.value=false;}}
-async function loadRoles(){roles.value=await api('/system/roles');}
+async function loadRoles(){roles.value=(await api<any>('/system/users/options')).roles??[];}
 watch([q,status],()=>{page.value=1;clearTimeout(timer);timer=window.setTimeout(load,180);}); watch(page,load); onMounted(()=>Promise.all([load(),loadRoles()]));
-function openCreate(){Object.assign(form,{username:'',password:'Wrc@2026!',displayName:'',email:'',portal:'REGULATORY',roleIds:[]});dialog.value=true;}
+function openCreate(){Object.assign(form,{username:'',password:'',displayName:'',email:'',portal:'REGULATORY',roleIds:[]});dialog.value=true;}
 async function create(){if(!form.username.trim())return ElMessage.warning('请填写登录账号');if(form.username.trim().length<3||form.username.trim().length>30)return ElMessage.warning('登录账号长度为 3–30 个字符');if(!form.displayName.trim())return ElMessage.warning('请填写显示姓名');if(!form.password||form.password.length<8)return ElMessage.warning('初始密码至少 8 位');if(!form.roleIds.length)return ElMessage.warning('请至少选择一个角色');saving.value=true;try{const payload={...form,username:form.username.trim(),displayName:form.displayName.trim(),email:form.email||undefined};await api('/system/users',{method:'POST',body:JSON.stringify(payload)});ElMessage.success('用户已创建');dialog.value=false;await load();}catch(e){ElMessage.error(e instanceof Error?e.message:'创建失败');}finally{saving.value=false;}}
 async function setStatus(row:UserRow,statusValue:string){try{await api(`/system/users/${row.id}/status`,{method:'PATCH',body:JSON.stringify({status:statusValue})});ElMessage.success(statusValue==='ACTIVE'?'用户已启用':'用户已停用');await load();}catch(e){ElMessage.error(e instanceof Error?e.message:'操作失败');}}
 async function bulkStatus(statusValue:string){await ElMessageBox.confirm(`确定${statusValue==='ACTIVE'?'启用':'停用'}选中的 ${selected.value.length} 个账号？`,'批量操作',{type:'warning'});for(const row of selected.value)await setStatus(row,statusValue);selected.value=[];}
+
+function resetQueryFilters() {
+  q.value = '';
+  status.value = '';
+  page.value = 1;
+  load();
+}
 </script>
 <template>
-  <PageHeader title="用户管理" description="管理监管端与企业端登录账号、岗位角色和账号状态。" :count="total"><el-button type="primary" :icon="Plus" @click="openCreate">新增用户</el-button></PageHeader>
-  <div class="table-toolbar"><el-input v-model="q" :prefix-icon="Search" clearable placeholder="搜索账号或姓名" /><el-select v-model="status" clearable placeholder="全部状态"><el-option label="正常" value="ACTIVE"/><el-option label="停用" value="INACTIVE"/></el-select><el-button :icon="RefreshCw" @click="load">刷新</el-button></div>
-  <div v-if="selected.length" class="bulk-bar"><strong>已选择 {{selected.length}} 项</strong><el-button size="small" @click="bulkStatus('ACTIVE')">启用</el-button><el-button size="small" @click="bulkStatus('INACTIVE')">停用</el-button><el-button text size="small" @click="selected=[]">清除</el-button></div>
+<section class="saas-page"><h1 class="sr-only">{{isProvince?'组织与人员':'成员管理'}}</h1>
+  <PageHeader :title="isProvince?'组织与人员':'成员管理'" description="管理监管端与企业端登录账号、岗位角色和账号状态。" :count="total" />
+  <QueryPanel :loading="loading" @search="load" @reset="resetQueryFilters">
+<QueryField label="关键词" keyword><el-input aria-label="关键词" v-model="q" :prefix-icon="Search" clearable placeholder="搜索账号或姓名" /></QueryField>
+<QueryField label="状态"><el-select aria-label="状态" v-model="status" clearable placeholder="全部状态"><el-option label="正常" value="ACTIVE"/><el-option label="停用" value="INACTIVE"/></el-select></QueryField>
+</QueryPanel>
+<ListPanel :title="(isProvince?'组织与人员':'成员管理') + '列表'" :total="error ? undefined : (total)">
+<template #actions><el-button v-if="session.user?.permissions.includes('system:organization:read')" @click="router.push('/system/organizations')">组织机构</el-button><el-button v-if="canCreate" type="primary" :icon="Plus" @click="openCreate">新增用户</el-button></template>
+<div v-if="selected.length&&canUpdate" class="bulk-bar"><strong>已选择 {{selected.length}} 项</strong><el-button size="small" @click="bulkStatus('ACTIVE')">启用</el-button><el-button size="small" @click="bulkStatus('INACTIVE')">停用</el-button><el-button text size="small" @click="selected=[]">清除</el-button></div>
   <div v-if="error" class="error-state"><span>{{error}}</span><el-button @click="load">重试</el-button></div>
   <el-table v-else v-loading="loading" :data="rows" row-key="id" @selection-change="selected=$event" empty-text="暂无用户数据">
-    <el-table-column type="selection" width="44"/><el-table-column label="用户" min-width="180"><template #default="{row}"><div class="identity-cell"><strong>{{row.displayName}}</strong><span>{{row.username}}</span></div></template></el-table-column>
+    <el-table-column v-if="canUpdate" type="selection" width="44"/><el-table-column label="用户" min-width="180"><template #default="{row}"><div class="identity-cell"><strong>{{row.displayName}}</strong><span>{{row.username}}</span></div></template></el-table-column>
     <el-table-column label="门户" width="110"><template #default="{row}">{{row.portal==='REGULATORY'?'监管端':'企业端'}}</template></el-table-column><el-table-column label="角色" min-width="160"><template #default="{row}">{{row.roles.map((x:any)=>x.role.name).join('、')}}</template></el-table-column>
     <el-table-column label="组织 / 企业" min-width="200"><template #default="{row}"><div class="identity-cell"><strong>{{row.organization?.name??'—'}}</strong><span>{{row.enterprise?.name??'监管账号'}}</span></div></template></el-table-column>
     <el-table-column label="状态" width="90"><template #default="{row}"><span class="status-mark" :class="row.status.toLowerCase()"><i></i>{{row.status==='ACTIVE'?'正常':'停用'}}</span></template></el-table-column>
-    <el-table-column label="操作" width="64" align="right"><template #default="{row}"><el-dropdown trigger="click"><el-button text circle aria-label="用户操作"><MoreHorizontal :size="17"/></el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="setStatus(row,row.status==='ACTIVE'?'INACTIVE':'ACTIVE')">{{row.status==='ACTIVE'?'停用账号':'启用账号'}}</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template></el-table-column>
+    <el-table-column v-if="canUpdate" label="操作" width="64" align="right"><template #default="{row}"><el-dropdown trigger="click"><el-button text circle aria-label="用户操作"><MoreHorizontal :size="17"/></el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="setStatus(row,row.status==='ACTIVE'?'INACTIVE':'ACTIVE')">{{row.status==='ACTIVE'?'停用账号':'启用账号'}}</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template></el-table-column>
   </el-table><div class="pagination-row"><span>共 {{total}} 条</span><el-pagination v-model:current-page="page" layout="prev, pager, next" :total="total" :page-size="20"/></div>
-  <el-dialog v-model="dialog" title="新增用户" width="520" destroy-on-close><el-form label-position="top"><div class="form-grid"><el-form-item label="登录账号"><el-input v-model="form.username" input-id="create-username"/></el-form-item><el-form-item label="显示姓名"><el-input v-model="form.displayName" input-id="create-display-name"/></el-form-item></div><el-form-item label="初始密码"><el-input v-model="form.password" input-id="create-password" type="password" show-password/></el-form-item><div class="form-grid"><el-form-item label="所属门户"><el-select v-model="form.portal" aria-label="所属门户" @change="form.roleIds=[]"><el-option label="监管端" value="REGULATORY"/><el-option label="企业端" value="ENTERPRISE"/></el-select></el-form-item><el-form-item label="角色"><el-select v-model="form.roleIds" aria-label="角色" multiple><el-option v-for="role in filteredRoles" :key="role.id" :label="role.name" :value="role.id"/></el-select></el-form-item></div></el-form><template #footer><el-button @click="dialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="create">创建用户</el-button></template></el-dialog>
-</template>
+
+</ListPanel>
+<el-dialog v-model="dialog" title="新增用户" width="520" destroy-on-close><el-form label-position="top"><div class="form-grid"><el-form-item label="登录账号"><el-input v-model="form.username" input-id="create-username"/></el-form-item><el-form-item label="显示姓名"><el-input v-model="form.displayName" input-id="create-display-name"/></el-form-item></div><el-form-item label="初始密码"><el-input v-model="form.password" input-id="create-password" type="password" show-password/></el-form-item><div class="form-grid"><el-form-item label="所属门户"><el-select v-model="form.portal" aria-label="所属门户" @change="form.roleIds=[]"><el-option label="监管端" value="REGULATORY"/><el-option v-if="!isProvince" label="企业端" value="ENTERPRISE"/></el-select></el-form-item><el-form-item label="角色"><el-select v-model="form.roleIds" aria-label="角色" multiple><el-option v-for="role in filteredRoles" :key="role.id" :label="role.name" :value="role.id"/></el-select></el-form-item></div></el-form><template #footer><el-button @click="dialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="create">创建用户</el-button></template></el-dialog>
+</section></template>

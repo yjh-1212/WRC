@@ -1,7 +1,5 @@
 import AMapLoader from '@amap/amap-jsapi-loader';
 
-const ALL_PLUGINS = ['AMap.Scale', 'AMap.ToolBar', 'AMap.MarkerCluster', 'AMap.HeatMap', 'AMap.MoveAnimation', 'AMap.MouseTool', 'AMap.GraspRoad'];
-
 let loading: Promise<any> | null = null;
 
 function applySecurity() {
@@ -30,24 +28,24 @@ function ensurePlugins(AMap: any, plugins: string[]) {
   });
 }
 
-/** 监管端、企业端所有地图页共用同一份 SDK，必须带齐聚合/热力/围栏/纠偏插件。 */
-export function loadAMap(_lite = false) {
+/** 先加载 JSAPI 核心；聚合、热力、绘制和纠偏等能力由具体地图按需补充。 */
+export function loadAMap(plugins: string[] = []) {
   if (!isAmapConfigured()) return Promise.reject(new Error('地图配置缺失，请在本地环境变量中配置高德 Web 端 Key 与安全密钥。'));
   applySecurity();
   if (!loading) {
     loading = AMapLoader.load({
       key: import.meta.env.VITE_AMAP_KEY,
       version: '2.0',
-      plugins: ALL_PLUGINS,
+      plugins: [],
     }).then((AMap) => {
       AMap.getConfig().appname = 'amap-jsapi-skill';
-      return ensurePlugins(AMap, ALL_PLUGINS);
+      return AMap;
     }).catch((error) => {
       loading = null;
       throw error;
     });
   }
-  return loading.then((AMap) => ensurePlugins(AMap, ALL_PLUGINS));
+  return loading.then((AMap) => ensurePlugins(AMap, [...new Set(plugins)]));
 }
 
 export function preloadAMap() {

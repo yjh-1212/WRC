@@ -1,0 +1,6 @@
+{
+  "mode": "builtin-imagegen",
+  "intent": "edit",
+  "source": "D:/项目资料/Code/Wurenche/docs/designs/city-analysis-evaluation-2026-10-31/03-enterprise-evaluation.png",
+  "prompt": "Use case: precise-object-edit. Preserve this entire existing enterprise evaluation UI design screenshot pixel-for-pixel as far as possible: all navigation, logo, layout, all table text and numbers, the scoring drawer and all metadata remain unchanged. Make just ONE addition: place the established small blue-white robot “AI助手” floating entry at the bottom-right corner, at the same visual scale as the municipal platform's generic assistant. To avoid covering buttons, reserve a clean78px strip at the right end of the drawer footer by slightly shortening the blue 导出评价 button. Keep both 关闭 and 导出评价 fully visible and clickable. The robot and AI助手 label must not obscure the 本次发布留存 panel or table content. No other changes, no other new controls. Crisp Simplified Chinese."
+}

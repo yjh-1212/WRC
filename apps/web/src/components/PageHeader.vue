@@ -8,8 +8,8 @@ watchEffect(() => {
 });
 </script>
 <template>
-  <header class="page-header">
-    <div><div class="title-line"><h1>{{ title }}</h1><span v-if="count !== undefined" class="count">{{ count }}</span></div><p v-if="description">{{ description }}</p></div>
+  <h1 class="sr-only">{{ title }}</h1>
+  <header v-if="$slots.default" class="page-header" :aria-label="`${title}页面操作`">
     <div class="header-actions"><slot /></div>
   </header>
 </template>

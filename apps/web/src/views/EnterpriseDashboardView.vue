@@ -6,6 +6,7 @@ import {
   MapPinned, RefreshCw, Route, ShieldAlert, ShieldCheck, ShieldX, Siren, Truck, Wifi,
 } from 'lucide-vue-next';
 import { api } from '../api';
+import { safetyTypeText as typeText } from '../safety-labels';
 import OperationsMap from '../components/OperationsMap.vue';
 import { useDashboardMotion } from '../useDashboardMotion';
 import type { DashboardTask, EnterpriseApplications, EnterpriseRisks, EnterpriseSummary, EnterpriseVehicles } from '../dashboard-types';
@@ -46,9 +47,7 @@ async function load() {
   ]);
 }
 function go(path: string) { router.push(path); }
-function formatTime(value: string) { return new Date(value).toLocaleString('zh-CN', { hour12: false }); }
 function formatShortTime(value: string) { return new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }); }
-function typeText(value: string) { return ({ VEHICLE_FAULT: '车辆故障', AUTONOMOUS_ABNORMAL: '自动驾驶异常', OVERSPEED: '超速', OUT_OF_BOUNDS: '越出运行区域', NO_ENTRY: '闯入禁行区', OFFLINE: '车辆离线', MANUAL_REPORT: '主动上报' } as Record<string, string>)[value] ?? value; }
 function applicationTypeText(value: string) { return ({ ENTERPRISE_ONBOARDING: '企业入驻', ROAD_TEST: '路测申请', LICENSE_RENEWAL: '续期申请' } as Record<string, string>)[value] ?? value; }
 function statusText(value: string) { return ({ DRAFT: '草稿', IN_REVIEW: '审批中', RETURNED: '待补正', APPROVED: '已通过', REJECTED: '未通过', PENDING_CONFIRMATION: '待确认', PENDING_HANDLING: '待处置', IN_PROGRESS: '处理中', PENDING_REVIEW: '待复核', CLOSED: '已关闭', EXPIRING: '即将到期', EXPIRED: '已过期' } as Record<string, string>)[value] ?? value; }
 function levelText(value: string) { return ({ CRITICAL: '严重', HIGH: '高', MEDIUM: '一般', LOW: '低', INFO: '普通' } as Record<string, string>)[value] ?? value; }
@@ -87,19 +86,6 @@ function taskContext(item: DashboardTask) {
   return item.description.split('·')[0]?.trim() || item.description;
 }
 
-const greet = computed(() => {
-  const hour = new Date().getHours();
-  if (hour < 12) return '上午好';
-  if (hour < 18) return '下午好';
-  return '晚上好';
-});
-const priorityCount = computed(() => tasks.value.filter((item) => item.level === 'CRITICAL' || item.level === 'HIGH').length);
-const safetyState = computed(() => {
-  if (!summary.value) return { label: '正常', tone: 'ok' };
-  if (summary.value.metrics.severeAlerts > 0 || summary.value.metrics.overdueActions > 0) return { label: '需关注', tone: 'watch' };
-  if (summary.value.metrics.todayAlerts > 0) return { label: '需关注', tone: 'watch' };
-  return { label: '正常', tone: 'ok' };
-});
 const trend = computed(() => risks.value?.operations.trend ?? []);
 const mileageDelta = computed(() => {
   if (trend.value.length < 2) return null;
@@ -203,25 +189,6 @@ onMounted(load);
     </div>
     <template v-else>
       <div v-if="!summary" class="dashboard-skeleton-metrics ent-skeleton" aria-label="正在加载企业指标"><el-skeleton-item v-for="n in 6" :key="n" variant="rect" /></div>
-      <header v-else class="dash-head ent-head">
-        <div class="dash-head-main">
-          <div class="dash-head-title-row">
-            <h2 class="dash-head-title">{{ summary.meta.enterprise.name }}</h2>
-            <span class="dash-head-badge" :class="safetyState.tone">{{ safetyState.label }}</span>
-          </div>
-          <p class="dash-head-desc">{{ greet }}，今日 <b>{{ taskTotal }}</b> 项待处理<span v-if="priorityCount"> · <b class="is-watch">{{ priorityCount }}</b> 项优先关注</span><span v-else> · 运营状态正常</span></p>
-          <div class="dash-head-chips" aria-label="关键概览">
-            <span><em>在线率</em><strong>{{ summary.metrics.onlineRate }}%</strong></span>
-            <span><em>今日里程</em><strong>{{ summary.metrics.todayMileage }}<small>km</small></strong></span>
-            <span><em>待处理</em><strong>{{ summary.metrics.pendingActions }}</strong></span>
-            <span><em>今日告警</em><strong :class="{ 'is-risk': summary.metrics.severeAlerts > 0 }">{{ summary.metrics.todayAlerts }}</strong></span>
-          </div>
-        </div>
-        <div class="dash-head-side">
-          <time class="dash-head-time">更新于 {{ formatTime(summary.meta.updatedAt) }}</time>
-          <el-button :icon="RefreshCw" :loading="loading.summary" aria-label="刷新企业运营工作台" @click="load">刷新</el-button>
-        </div>
-      </header>
       <div v-if="errors.summary" class="dashboard-refresh-error" role="alert">
         <span>部分企业数据刷新失败：{{ errors.summary }}</span>
         <el-button size="small" :icon="RefreshCw" @click="load">重新加载</el-button>

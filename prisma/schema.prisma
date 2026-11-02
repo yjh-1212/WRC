@@ -8,6 +8,8 @@ datasource db {
 }
 
 model Organization {
+  workspaceId String?
+
   id                      String                   @id @default(cuid())
   code                    String                   @unique
   name                    String
@@ -35,10 +37,15 @@ model Organization {
   accidentReconstructions AccidentReconstruction[]
   regulatoryReports       RegulatoryReport[]
   deliveryOrders          DeliveryOrder[]
+  safetyOperators         SafetyOperator[]
+  regulatoryInspections   RegulatoryInspection[]
+  businessRules           BusinessRule[]
+  creditAccounts          CreditAccount[]
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
 
   @@index([parentId])
+  @@index([workspaceId])
 }
 
 model Enterprise {
@@ -72,6 +79,10 @@ model Enterprise {
   accidentReconstructions AccidentReconstruction[]
   regulatoryReports       RegulatoryReport[]
   deliveryOrders          DeliveryOrder[]
+  safetyOperators         SafetyOperator[]
+  interfaceConfigs        ExternalInterfaceConfig[]
+  regulatoryInspections   RegulatoryInspection[]
+  creditAccounts          CreditAccount[]
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
 
@@ -127,6 +138,11 @@ model Vehicle {
   vin                 String                        @unique
   deviceNo            String                        @unique
   name                String
+  unifiedCode         String?                       @unique
+  unifiedCodeIssuedAt DateTime?
+  vehicleType         String                        @default("DELIVERY")
+  operationScene      String                        @default("URBAN_DELIVERY")
+  upperEquipment      String?
   modelId             String
   model               VehicleModel                  @relation(fields: [modelId], references: [id])
   enterpriseId        String
@@ -145,6 +161,7 @@ model Vehicle {
   realtimeStatus      VehicleRealtimeStatus?
   operationRecords    OperationRecord[]
   trackPoints         VehicleTrackPoint[]
+  observations        VehicleObservation[]
   operationRegions    OperationRegionVehicle[]
   onlineDailyMetrics  VehicleOnlineDaily[]
   safetyAlerts        SafetyAlert[]
@@ -154,6 +171,8 @@ model Vehicle {
   violations          Violation[]
   offlineEvents       OfflineEvent[]
   deliveryOrders      DeliveryOrder[]
+  operatorAssignments SafetyOperatorVehicle[]
+  creditAccounts      CreditAccount[]
   createdAt           DateTime                      @default(now())
   updatedAt           DateTime                      @updatedAt
 
@@ -162,6 +181,171 @@ model Vehicle {
   @@index([modelId])
   @@index([onlineStatus])
   @@index([deletedAt])
+}
+
+model SafetyOperator {
+  id                String                  @id @default(cuid())
+  businessNo        String                  @unique
+  name              String
+  idNumberMasked    String
+  phone             String?
+  enterpriseId      String
+  enterprise        Enterprise              @relation(fields: [enterpriseId], references: [id])
+  organizationId    String
+  organization      Organization            @relation(fields: [organizationId], references: [id])
+  qualificationType String                  @default("REMOTE_SAFETY_OPERATOR")
+  qualificationNo   String?
+  trainingCompleted Boolean                 @default(false)
+  appliedAt         DateTime                @default(now())
+  reviewedAt        DateTime?
+  expiresAt         DateTime?
+  status            String                  @default("PENDING")
+  reviewComment     String?
+  shiftStart        String?
+  shiftEnd          String?
+  onDuty            Boolean                 @default(false)
+  vehicles          SafetyOperatorVehicle[]
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  @@index([enterpriseId, status])
+  @@index([organizationId, status])
+}
+
+model SafetyOperatorVehicle {
+  operatorId String
+  vehicleId  String
+  operator   SafetyOperator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  vehicle    Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  assignedAt DateTime       @default(now())
+
+  @@id([operatorId, vehicleId])
+  @@index([vehicleId])
+}
+
+model ExternalInterfaceConfig {
+  id               String     @id @default(cuid())
+  businessNo       String     @unique
+  name             String
+  enterpriseId     String
+  enterprise       Enterprise @relation(fields: [enterpriseId], references: [id])
+  interfaceType    String
+  endpoint         String
+  authType         String     @default("SIGNATURE")
+  protocolVersion  String     @default("1.0")
+  contactName      String?
+  contactPhone     String?
+  capabilitiesJson String     @default("[]")
+  environment      String     @default("TEST")
+  status           String     @default("UNVERIFIED")
+  lastTestAt       DateTime?
+  lastTestResult   String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@index([enterpriseId, interfaceType])
+  @@index([status])
+}
+
+model RegulatoryInspection {
+  id                 String       @id @default(cuid())
+  businessNo         String       @unique
+  title              String
+  inspectionType     String       @default("ROUTINE")
+  enterpriseId       String
+  enterprise         Enterprise   @relation(fields: [enterpriseId], references: [id])
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id])
+  inspectorName      String
+  scheduledAt        DateTime
+  completedAt        DateTime?
+  status             String       @default("PLANNED")
+  result             String?
+  issueCount         Int          @default(0)
+  rectificationDueAt DateTime?
+  rectification      String?
+  reviewComment      String?
+  materialsJson      String       @default("[]")
+  historyJson        String       @default("[]")
+  version            Int          @default(1)
+  issues             InspectionIssue[]
+  closedAt           DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@index([enterpriseId, status, scheduledAt])
+  @@index([organizationId, status, scheduledAt])
+}
+
+model BusinessRule {
+  id             String       @id @default(cuid())
+  businessNo     String       @unique
+  category       String
+  name           String
+  version        Int          @default(1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  valueJson      String
+  status         String       @default("DRAFT")
+  effectiveAt    DateTime?
+  publishedBy    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, category, version])
+  @@index([category, status])
+}
+
+model CreditAccount {
+  id             String        @id @default(cuid())
+  businessNo     String        @unique
+  subjectType    String
+  enterpriseId   String?
+  enterprise     Enterprise?   @relation(fields: [enterpriseId], references: [id])
+  vehicleId      String?
+  vehicle        Vehicle?      @relation(fields: [vehicleId], references: [id])
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  initialScore   Int           @default(100)
+  currentScore   Int           @default(100)
+  grade          String        @default("A")
+  status         String        @default("ACTIVE")
+  entries        CreditEntry[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([subjectType, enterpriseId, vehicleId])
+  @@index([organizationId, grade])
+}
+
+model CreditEntry {
+  id               String        @id @default(cuid())
+  businessNo       String        @unique
+  accountId        String
+  account          CreditAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  eventType        String
+  severity         String
+  scoreChange      Int
+  scoreAfter       Int
+  reason           String
+  sourceType       String?
+  sourceId         String?
+  status           String        @default("CONFIRMED")
+  confirmedBy      String?
+  confirmedAt      DateTime?
+  repairEligibleAt DateTime?
+  repairedAt       DateTime?
+  sourceKey        String?       @unique
+  ruleSnapshotJson String        @default("{}")
+  historyJson      String        @default("[]")
+  repairNote       String?
+  repairedBy       String?
+  repairMaterialsJson String     @default("[]")
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([accountId, createdAt])
+  @@index([status, repairEligibleAt])
 }
 
 model VehicleLicense {
@@ -178,6 +362,11 @@ model VehicleLicense {
   expiresAt           DateTime
   status              String                 @default("VALID")
   remark              String?
+  licenseType         String                 @default("LEGACY")
+  conditionsJson      String                 @default("{}")
+  historyJson         String                 @default("[]")
+  sourceApplicationId String?
+  version             Int                    @default(1)
   renewalApplications AdmissionApplication[] @relation("RenewalTargetLicense")
   approvalResults     ApprovalResult[]
   createdAt           DateTime               @default(now())
@@ -226,6 +415,10 @@ model EnterpriseQualification {
 }
 
 model User {
+  workspaceId  String?
+  accountLevel String  @default("CITY")
+  authVersion  Int     @default(0)
+
   id                     String                 @id @default(cuid())
   username               String                 @unique
   passwordHash           String
@@ -256,9 +449,12 @@ model User {
   @@index([organizationId])
   @@index([enterpriseId])
   @@index([status])
+  @@index([workspaceId])
 }
 
 model Role {
+  workspaceId String?
+
   id          String           @id @default(cuid())
   code        String           @unique
   name        String
@@ -269,6 +465,8 @@ model Role {
   permissions RolePermission[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
+
+  @@index([workspaceId])
 }
 
 model Permission {
@@ -370,6 +568,8 @@ model AuditLog {
 }
 
 model ProcessDefinition {
+  workspaceId String?
+
   id              String                  @id @default(cuid())
   businessNo      String                  @unique
   code            String                  @unique
@@ -384,6 +584,7 @@ model ProcessDefinition {
   updatedAt       DateTime                @updatedAt
 
   @@index([applicationType, status])
+  @@index([workspaceId])
 }
 
 model ProcessNodeDefinition {
@@ -438,6 +639,8 @@ model AdmissionApplication {
   targetLicense          VehicleLicense?               @relation("RenewalTargetLicense", fields: [targetLicenseId], references: [id])
   requestedExpiresAt     DateTime?
   renewalReason          String?
+  detailsJson            String                        @default("{}")
+  materialsJson          String                        @default("[]")
   vehicles               AdmissionApplicationVehicle[]
   processInstances       ProcessInstance[]
   approvalTasks          ApprovalTask[]
@@ -522,6 +725,7 @@ model ApprovalHistory {
   toStatus          String
   nodeName          String?
   comment           String?
+  snapshotJson      String?
   createdAt         DateTime             @default(now())
 
   @@index([applicationId, createdAt])
@@ -591,6 +795,7 @@ model OperationRegion {
   speedLimit       Int                      @default(20)
   allowedHours     String?
   ruleDescription  String?
+  historyJson      String                   @default("[]")
   vehicles         OperationRegionVehicle[]
   records          OperationRecord[]
   createdAt        DateTime                 @default(now())
@@ -720,6 +925,26 @@ model VehicleOnlineDaily {
   @@index([metricDate, onlineRate])
 }
 
+model VehicleObservation {
+  id                String   @id @default(cuid())
+  vehicleId         String
+  vehicle           Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  operationRecordId String?
+  longitude         Float
+  latitude          Float
+  speed             Float
+  battery           Int
+  heading           Float    @default(0)
+  drivingState      String
+  autonomousState   String
+  pointType         String   @default("NORMAL")
+  recordedAt        DateTime
+  receivedAt        DateTime @default(now())
+
+  @@index([vehicleId, recordedAt])
+  @@index([operationRecordId, recordedAt])
+}
+
 model SafetyAlert {
   id                String          @id @default(cuid())
   businessNo        String          @unique
@@ -728,6 +953,9 @@ model SafetyAlert {
   level             String          @default("MEDIUM")
   title             String
   description       String?
+  evidenceJson      String          @default("{}")
+  attachmentJson    String?
+  ruleKey           String?         @unique
   enterpriseId      String
   enterprise        Enterprise      @relation(fields: [enterpriseId], references: [id])
   organizationId    String
@@ -774,6 +1002,8 @@ model ElectronicFence {
   speedLimit      Int?
   allowedHours    String?
   ruleDescription String?
+  version         Int                      @default(1)
+  historyJson     String                   @default("[]")
   vehicles        ElectronicFenceVehicle[]
   triggers        FenceTrigger[]
   createdAt       DateTime                 @default(now())
@@ -848,6 +1078,7 @@ model Accident {
   damageDescription String?
   investigation     String?
   responsibility    String?
+  determinationJson String                  @default("{}")
   disposalProgress  String?
   attachmentJson    String?
   status            String                  @default("REPORTED")
@@ -924,6 +1155,7 @@ model EmergencyTask {
   id              String             @id @default(cuid())
   businessNo      String             @unique
   alertId         String
+  activeKey       String?            @unique
   alert           SafetyAlert        @relation(fields: [alertId], references: [id])
   accidentId      String?
   accident        Accident?          @relation(fields: [accidentId], references: [id])
@@ -936,6 +1168,7 @@ model EmergencyTask {
   requirement     String
   responseMode    String?
   assigneeUserId  String?
+  responsibleName String?
   assigneeUser    User?              @relation("EmergencyAssignee", fields: [assigneeUserId], references: [id])
   dueAt           DateTime
   status          String             @default("PENDING_DISPATCH")
@@ -954,6 +1187,97 @@ model EmergencyTask {
   @@index([enterpriseId, status, dueAt])
   @@index([organizationId, status, dueAt])
   @@index([alertId, createdAt])
+}
+
+// Append-only snapshots. Original telemetry/video references are never overwritten
+// by a later backfill; each evidence preservation creates another revision.
+model SafetyEvidenceRevision {
+  id             String   @id @default(cuid())
+  eventType      String
+  eventId        String
+  version        Int
+  vehicleId      String?
+  enterpriseId   String
+  organizationId String
+  occurredAt     DateTime
+  windowFrom     DateTime
+  windowTo       DateTime
+  state          String
+  snapshotJson   String
+  sha256         String
+  reason         String
+  actorId        String
+  actorName      String
+  createdAt      DateTime @default(now())
+
+  @@unique([eventType, eventId, version])
+  @@index([organizationId, createdAt])
+  @@index([enterpriseId, createdAt])
+}
+
+model SafetyMaterial {
+  id             String   @id
+  enterpriseId   String
+  organizationId String
+  name           String
+  mimeType       String
+  size           Int
+  sha256         String
+  uploadedById   String
+  uploadedByName String
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([enterpriseId, createdAt])
+}
+
+model InspectionIssue {
+  id             String               @id @default(cuid())
+  inspectionId   String
+  inspection     RegulatoryInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  enterpriseId   String
+  organizationId String
+  sequence       Int
+  title          String
+  requirement    String
+  responsibleName String
+  dueAt          DateTime
+  task           SafetyRectificationTask?
+  createdAt      DateTime             @default(now())
+
+  @@unique([inspectionId, sequence])
+  @@index([organizationId, createdAt])
+  @@index([enterpriseId, createdAt])
+}
+
+model SafetyRectificationTask {
+  id                String   @id @default(cuid())
+  businessNo        String   @unique
+  enterpriseId      String
+  organizationId    String
+  sourceType        String
+  sourceId          String
+  inspectionIssueId String?  @unique
+  inspectionIssue   InspectionIssue? @relation(fields: [inspectionIssueId], references: [id])
+  activeKey         String?  @unique
+  title             String
+  requirement       String
+  responsibleName   String
+  dueAt             DateTime
+  status            String   @default("WAITING_RESPONSE")
+  respondedAt       DateTime?
+  feedback          String?
+  materialsJson     String   @default("[]")
+  reviewComment     String?
+  historyJson       String   @default("[]")
+  version           Int      @default(1)
+  closedAt          DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([organizationId, status, dueAt])
+  @@index([enterpriseId, status, dueAt])
+  @@index([sourceType, sourceId])
 }
 
 model EmergencyTaskLog {
@@ -1022,6 +1346,8 @@ model EvaluationTask {
   createdByName  String
   generatedAt    DateTime?
   publishedAt    DateTime?
+  rulesVersion   String?
+  rulesSnapshotJson String      @default("[]")
   evaluations    EnterpriseEvaluation[]
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
@@ -1048,6 +1374,14 @@ model EnterpriseEvaluation {
   status          String             @default("DRAFT")
   conclusion      String?
   publishedAt     DateTime?
+  qualityJson     String             @default("[]")
+  evidenceJson    String             @default("[]")
+  historyJson     String             @default("[]")
+  reviewedById    String?
+  reviewedByName  String?
+  reviewedAt      DateTime?
+  reviewComment   String?
+  version         Int                @default(1)
   appeals         EvaluationAppeal[]
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
@@ -1131,4 +1465,310 @@ model RegulatoryReport {
   @@index([organizationId, category, periodEnd])
   @@index([enterpriseId, periodEnd])
   @@index([status, generatedAt])
+}
+
+/// 三级监管驾驶舱的行政区划目录。区划边界由地图服务按 adcode 获取，
+/// 本表只保存可审计的区划元数据与默认视点。
+model CockpitRegion {
+  id           String                  @id @default(cuid())
+  code         String                  @unique
+  name         String
+  level        String
+  parentCode   String?
+  longitude    Float
+  latitude     Float
+  cameraHeight Float?
+  status       String                  @default("ACTIVE")
+  sortOrder    Int                     @default(0)
+  sourceName   String
+  reportedAt   DateTime
+  snapshots    CockpitRegionSnapshot[]
+  roadRights   CockpitRoadRight[]
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  @@index([level, parentCode, status])
+}
+
+/// 国家、省级宏观态势的数据报送快照。页面只读取数据库内最新一批快照，
+/// 不在浏览器端生成或随机补齐监管指标。
+model CockpitRegionSnapshot {
+  id                   String        @id @default(cuid())
+  regionId             String
+  region               CockpitRegion @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  capturedAt           DateTime
+  registeredVehicles   Int
+  onlineVehicles       Int
+  runningVehicles      Int
+  operatingEnterprises Int
+  mileageToday         Float
+  riskEvents           Int
+  majorEvents          Int
+  unresolvedMajor      Int
+  dataQualityRate      Float
+  deliveryVehicles     Int           @default(0)
+  sanitationVehicles   Int           @default(0)
+  patrolVehicles       Int           @default(0)
+  retailVehicles       Int           @default(0)
+  shuttleVehicles      Int           @default(0)
+  vehicleMetricsJson   String?
+  sourceName           String
+  sourceType           String        @default("REGULATORY_REPORT")
+  reportedAt           DateTime
+  createdAt            DateTime      @default(now())
+
+  @@unique([regionId, capturedAt])
+  @@index([capturedAt])
+}
+
+/// 城市层路权数据，用于展示获批道路/区域而非装饰性路线。
+model CockpitRoadRight {
+  id             String        @id @default(cuid())
+  businessNo     String        @unique
+  regionId       String
+  region         CockpitRegion @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  name           String
+  roadName       String
+  rightType      String
+  geometryType   String        @default("LINE")
+  geometryJson   String
+  validFrom      DateTime
+  validTo        DateTime
+  status         String        @default("ACTIVE")
+  speedLimit     Int?
+  sourceDocument String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([regionId, status, validTo])
+}
+
+model CityWorkspace {
+  id             String    @id @default(cuid())
+  cityCode       String    @unique
+  cityName       String
+  organizationId String    @unique
+  status         String    @default("PENDING_ACTIVATION")
+  modulesJson    String    @default("[]")
+  validUntil     DateTime?
+  quotasJson     String    @default("{}")
+  configJson     String    @default("{}")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model CityApplication {
+  materials ApplicationMaterial[]
+
+  id               String   @id @default(cuid())
+  businessNo       String   @unique
+  kind             String   @default("NEW")
+  workspaceId      String?
+  cityCode         String
+  cityName         String
+  unitName         String
+  contactName      String
+  contactPhone     String
+  adminName        String
+  adminUsername    String
+  modulesJson      String   @default("[]")
+  expectedVehicles Int      @default(0)
+  materialNote     String
+  status           String   @default("SUBMITTED")
+  trackingHash     String
+  revision         Int      @default(1)
+  historyJson      String   @default("[]")
+  reviewComment    String?
+  grantJson        String   @default("{}")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([cityCode, status])
+  @@index([workspaceId])
+}
+
+model WorkspaceInvitation {
+  id          String    @id @default(cuid())
+  workspaceId String
+  username    String
+  displayName String
+  roleCode    String    @default("CITY_ADMIN")
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, username])
+}
+
+model ProvisionJob {
+  id            String   @id @default(cuid())
+  applicationId String   @unique
+  workspaceId   String?
+  status        String   @default("PENDING")
+  error         String?
+  attempts      Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model WorkspaceNotice {
+  id          String    @id @default(cuid())
+  workspaceId String?
+  title       String
+  content     String
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, createdAt])
+}
+
+model ApplicationMaterial {
+  application CityApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  id            String    @id @default(cuid())
+  applicationId String
+  originalName  String
+  mimeType      String
+  size          Int
+  storageName   String    @unique
+  sha256        String
+  revision      Int       @default(1)
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([applicationId, deletedAt])
+}
+
+model ProvinceMatter {
+  id              String               @id @default(cuid())
+  businessNo      String               @unique
+  kind            String
+  template        String               @default("STANDARD")
+  leadWorkspaceId String?
+  checklistJson   String               @default("[]")
+  relatedType     String?
+  relatedId       String?
+  title           String
+  description     String
+  level           String               @default("MEDIUM")
+  status          String               @default("DRAFT")
+  dueAt           DateTime?
+  basis           String?
+  resourceIdsJson String               @default("[]")
+  logsJson        String               @default("[]")
+  createdById     String
+  createdByName   String
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  assignments     ProvinceAssignment[]
+
+  @@index([kind, status, dueAt])
+  @@index([template, status])
+  @@index([relatedType, relatedId])
+}
+
+model ProvinceAssignment {
+  id            String         @id @default(cuid())
+  matterId      String
+  matter        ProvinceMatter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  workspaceId   String
+  status        String         @default("WAITING")
+  feedback      String?
+  evidenceNote  String?
+  reportJson    String?
+  respondedAt   DateTime?
+  submittedAt   DateTime?
+  reviewComment String?
+  closedAt      DateTime?
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([matterId, workspaceId])
+  @@index([workspaceId, status])
+}
+
+model ProvincePilot {
+  id              String    @id @default(cuid())
+  workspaceId     String    @unique
+  stage           String    @default("PREPARING")
+  responsibleName String
+  planDate        DateTime?
+  summary         String
+  reviewComment   String?
+  logsJson        String    @default("[]")
+  updatedAt       DateTime  @updatedAt
+}
+
+model ProvinceResource {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  name         String
+  kind         String
+  status       String   @default("AVAILABLE")
+  capacity     Int      @default(1)
+  contactName  String?
+  contactPhone String?
+  conditions   String?
+  updatedAt    DateTime @updatedAt
+
+  @@index([workspaceId, status, kind])
+}
+
+model CockpitAppearance {
+  id        String   @id
+  revision  Int      @default(0)
+  payload   String   @default("{}")
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model AgentConversation {
+  id           String      @id @default(cuid())
+  userId       String
+  workspaceId  String?
+  enterpriseId String?
+  agentCode    String
+  title        String
+  pagePath     String      @default("")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  turns        AgentTurn[]
+
+  @@index([userId, updatedAt])
+}
+
+model AgentTurn {
+  id             String            @id @default(cuid())
+  conversationId String
+  requestKey     String
+  question       String
+  answer         String            @default("")
+  status         String            @default("PENDING")
+  sourcesJson    String            @default("[]")
+  factsJson      String            @default("{}")
+  scopeKey       String
+  mode           String            @default("MODEL")
+  error          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  conversation   AgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, requestKey])
+  @@index([conversationId, createdAt])
+}
+
+model ProvinceDutyEvaluation {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  period        String
+  status        String    @default("DRAFT")
+  score         Float
+  grade         String
+  breakdownJson String    @default("{}")
+  conclusion    String?
+  createdAt     DateTime  @default(now())
+  publishedAt   DateTime?
+
+  @@unique([workspaceId, period])
+  @@index([period, status])
 }

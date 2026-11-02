@@ -18,7 +18,7 @@
 
 ## Render（免费 Node）
 
-免费档不能用 Docker，也不能挂持久磁盘。用 **Node Web Service + Free**，构建时写入 SQLite 演示数据，API 同时托管前端页面。
+本仓库提供 **Node Web Service + Free** 配置，API 同时托管前端页面。数据库使用仓库内 `data/regulatory.db` 的完整本地快照，构建时只执行未应用迁移和只读完整性校验，不执行种子初始化、不覆盖现有业务数据。
 
 1. 把最新代码推到 GitHub。
 2. New Web Service，Language 选 **Node**，实例选 **Free**。不要选 Docker，也不要填 `mix phx.*`。
@@ -30,7 +30,7 @@
 | Instance type | Free |
 | Region | Virginia (US East) |
 | Root Directory | 空 |
-| Build Command | `corepack enable && pnpm install --frozen-lockfile && pnpm db:generate && pnpm --filter api build && pnpm --filter web build && mkdir -p data && pnpm db:deploy && pnpm db:seed` |
+| Build Command | `corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm db:generate && pnpm --filter api build && pnpm --filter web build && pnpm db:deploy && node tools/verify-deployment-data.cjs` |
 | Start Command | `node apps/api/dist/main.js` |
 
 环境变量（`VITE_*` 勾选 Available during build）：
@@ -50,7 +50,9 @@ VITE_AMAP_SECURITY_JS_CODE=<高德安全密钥>
 
 高德 Key：在 [高德控制台](https://console.amap.com/) 打开该 Web 端 Key，把 Render 域名加进「域名白名单」，例如 `你的服务.onrender.com`（不要带 `https://`）。未加白名单时底图会 `INVALID_USER_DOMAIN`。构建时必须注入 `VITE_AMAP_KEY` 与 `VITE_AMAP_SECURITY_JS_CODE`，漏配会导致前端打包后没有地图密钥。
 
-免费实例约 15 分钟无访问会休眠，下次打开要等约 1 分钟。没有磁盘，休眠或重新部署后只保留构建时写入的演示数据。付费 Docker 方案仍可用仓库根目录 `Dockerfile`。
+未挂持久磁盘时，重启或重新部署会丢失云端运行期间对 SQLite 和上传文件的修改，重新使用仓库中的快照。需要保留云端新增数据时，应使用支持持久磁盘的付费服务，或规划迁移到托管数据库。参见 [Render 持久磁盘说明](https://render.com/docs/disks)。不要把运行中的数据库直接覆盖到 Git 仓库。
+
+2026-11-02 同步包含全部本地数据库记录；本地三个材料目录为空，数据库中的安全及申请材料记录也为0。环境密钥仍通过 Render 环境变量设置，`.env`、构建产物、日志和临时备份不提交。已有 Render 服务请同步修改 Build Command，删除末尾的 `pnpm db:seed`。
 
 ## 容器部署
 

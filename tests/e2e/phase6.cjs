@@ -59,10 +59,10 @@ async function waitForMap(page) {
     if (await page.locator('.profile-grid > button').count() !== 2) throw new Error('企业画像数量异常');
 
     await page.goto(`${baseURL}/analytics/reports`);
-    await page.getByRole('heading', { name: '监管报表' }).waitFor();
+    await page.getByRole('heading', { name: /^(监管报告|统计报表)$/ }).waitFor();
     await page.locator('.el-table__body tr').first().waitFor();
     await page.getByRole('button', { name: '查看', exact: true }).first().click();
-    await page.getByRole('heading', { name: '监管报表预览' }).waitFor();
+    await page.getByRole('heading', { name: '报告预览' }).waitFor();
     await page.screenshot({ path: path.join(artifactDir, 'regulatory-report.png'), fullPage: true });
     await context.close();
 

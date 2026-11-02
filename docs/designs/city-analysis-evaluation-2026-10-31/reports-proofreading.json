@@ -1,0 +1,6 @@
+{
+  "mode": "builtin-imagegen",
+  "intent": "edit",
+  "source": "C:\\Users\\Lenovo\\.codex\\generated_images\\01a1877d-adbf-7933-84b8-03391ad6347c\\exec-9a6803db-e1a5-422a-8ca1-38d0cbd1989d.png",
+  "prompt": "Use case: precise-object-edit. Make only the following small final proofreading corrections to this existing municipal statistical report UI. Preserve every layout, chart, number, table, logo, navigation, filter and other visual element exactly.\n1. In the RIGHT report preview document large title, use exact Simplified Chinese text “济南市无人车运行统计日报”, including the character 车 between 人 and 运. Beneath it replace incorrect “统计时间：济南市” with exact “统计范围：济南市”. Keep 统计周期：2026/10/30 unchanged.\n2. At bottom-left table pagination keep 共12条 and pages1,2; change page size selector from20条/页 to10条/页, so page count is logically consistent.\n3. Add the established small blue-white robot AI助手 floating entry in the bottom-right corner. Reserve a ~78px clear right-side space next to the drawer footer export button, slightly shorten that button if necessary, so the icon and label do not cover any action or report text. Keep 关闭 and 导出数据 labels and actions.\nNo other changes. All Chinese must be sharp, accurate and readable."
+}

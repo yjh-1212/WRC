@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import QueryPanel from '../components/QueryPanel.vue';
+import QueryField from '../components/QueryField.vue';
+import ListPanel from '../components/ListPanel.vue';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import { Plus, RefreshCw, Search } from 'lucide-vue-next';
+import { Plus, Search } from 'lucide-vue-next';
 import { api } from '../api';
 import PageHeader from '../components/PageHeader.vue';
 import { useSessionStore } from '../stores/session';
@@ -14,7 +17,7 @@ const q = ref('');
 const dialog = ref(false);
 const saving = ref(false);
 const form = reactive({ code: '', name: '', parentId: '' });
-const isSuperAdmin = computed(() => Boolean(session.user?.roles.some((role) => role.code === 'SUPER_ADMIN')));
+const isSuperAdmin = computed(() => session.user?.permissions.includes('system:organization:update')??false);
 const filtered = computed(() => {
   const keyword = q.value.trim().toLowerCase();
   if (!keyword) return rows.value;
@@ -47,18 +50,21 @@ async function create() {
   } finally { saving.value = false; }
 }
 onMounted(load);
+
+function resetQueryFilters() {
+  q.value = '';
+  load();
+}
 </script>
 
 <template>
-  <PageHeader title="组织机构" description="监管部门层级决定监管账号的基础数据范围。新增机构仅超级管理员可操作。" :count="filtered.length">
-    <el-button :icon="RefreshCw" :loading="loading" @click="load">刷新</el-button>
-    <el-button v-if="isSuperAdmin" type="primary" :icon="Plus" @click="openCreate">新增机构</el-button>
-  </PageHeader>
-  <div class="table-toolbar">
-    <el-input v-model="q" :prefix-icon="Search" clearable placeholder="搜索机构名称或编码" aria-label="搜索机构" />
-    <el-button v-if="q" text @click="q = ''">清除筛选</el-button>
-  </div>
-  <div v-if="error" class="error-state"><strong>组织机构暂时无法加载</strong><span>{{ error }}</span><el-button @click="load">重试</el-button></div>
+  <PageHeader title="组织机构" description="监管部门层级决定监管账号的基础数据范围。按授权维护所属机构。" :count="filtered.length" />
+  <QueryPanel :loading="loading" @search="load" @reset="resetQueryFilters">
+<QueryField label="关键词" keyword><el-input v-model="q" :prefix-icon="Search" clearable placeholder="搜索机构名称或编码" aria-label="搜索机构" /></QueryField>
+</QueryPanel>
+<ListPanel title="组织机构列表" :total="error ? undefined : (filtered.length)">
+<template #actions><el-button v-if="isSuperAdmin" type="primary" :icon="Plus" @click="openCreate">新增机构</el-button></template>
+<div v-if="error" class="error-state"><strong>组织机构暂时无法加载</strong><span>{{ error }}</span><el-button @click="load">重试</el-button></div>
   <el-table v-else v-loading="loading" :data="filtered" row-key="id" empty-text="没有符合条件的组织机构">
     <el-table-column label="机构名称" min-width="220" prop="name" />
     <el-table-column label="机构编码" min-width="160" prop="code" />
@@ -67,12 +73,14 @@ onMounted(load);
       <template #default="{ row }"><span class="status-mark active"><i></i>{{ row.status === 'ACTIVE' ? '正常' : '停用' }}</span></template>
     </el-table-column>
   </el-table>
-  <el-dialog v-model="dialog" title="新增机构" width="520" destroy-on-close>
+
+</ListPanel>
+<el-dialog v-model="dialog" title="新增机构" width="520" destroy-on-close>
     <p class="dialog-note">新机构会进入监管层级，后续创建的监管账号可以挂到该机构并继承数据范围。</p>
     <el-form label-position="top">
       <div class="form-grid">
         <el-form-item label="机构编码" required><el-input v-model="form.code" input-id="org-code" placeholder="如 XSJT" /></el-form-item>
-        <el-form-item label="机构名称" required><el-input v-model="form.name" input-id="org-name" placeholder="如 萧山区交通运输局" /></el-form-item>
+        <el-form-item label="机构名称" required><el-input v-model="form.name" input-id="org-name" placeholder="如 历下区交通运输局" /></el-form-item>
       </div>
       <el-form-item label="上级机构">
         <el-select v-model="form.parentId" clearable filterable placeholder="不选则为市级或顶级机构" aria-label="上级机构">

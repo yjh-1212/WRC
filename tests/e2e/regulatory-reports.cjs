@@ -1,0 +1,170 @@
+const { chromium, request } = require('playwright');
+const { expect } = require('playwright/test');
+const { PrismaClient } = require('@prisma/client');
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+
+const base = process.env.TARGET_URL || 'http://127.0.0.1:5173';
+const apiBase = process.env.API_URL || 'http://127.0.0.1:8080/api';
+const password = process.env.TEST_PASSWORD;
+if (!password) throw new Error('Set TEST_PASSWORD to the existing local acceptance password.');
+const output = path.resolve('test-results/regulatory-reports');
+fs.mkdirSync(output, { recursive: true });
+const prisma = new PrismaClient(), ids = [], checks = [], errors = [];
+const run = `报告验收${Date.now()}`;
+let browser, http, provinceToken, cityToken;
+async function call(endpoint, token, method = 'GET', data, expected = 200) {
+  const response = await http.fetch(apiBase + endpoint, { method, headers: token ? { authorization: `Bearer ${token}` } : {}, data });
+  const body = await response.json();
+  assert.equal(response.status(), expected, `${method} ${endpoint}: ${body.message}`);
+  return body.data;
+}
+async function fixture(token, reportType, category, title) {
+  const report = await call('/analytics/reports', token, 'POST', { title, reportType, category, periodStart: '2026-09-29', periodEnd: '2026-10-28' }, 201);
+  ids.push(report.id); return report;
+}
+async function ready(page) { await page.locator('.report-list-table .el-loading-mask').waitFor({ state: 'hidden' }); }
+async function screenshot(page, name) { await page.screenshot({ path: path.join(output, name + '.png'), fullPage: true }); }
+
+(async () => {
+  http = await request.newContext();
+  provinceToken = (await call('/auth/login', null, 'POST', { username: 'admin', password })).accessToken;
+  cityToken = (await call('/auth/login', null, 'POST', { username: 'jinan_admin', password })).accessToken;
+  const own = await fixture(provinceToken, 'SPECIAL', 'COMPREHENSIVE', `${run}全省综合监管专题报告`);
+  const local = await fixture(cityToken, 'WEEKLY', 'OPERATIONS', `${run}济南运行周报`);
+  for (let index = 0; index < 10; index++) await fixture(provinceToken, index % 2 ? 'MONTHLY' : 'DAILY', 'OPERATIONS', `${run}运行报告${index + 1}`);
+  const me = await call('/auth/me', provinceToken);
+  const filtered = await call(`/analytics/reports?q=${run}&reportType=WEEKLY&organizationId=${local.organizationId}`, provinceToken);
+  assert.equal(filtered.total, 1); assert.equal(filtered.items[0].id, local.id);
+  await call(`/analytics/reports/${local.id}`, provinceToken, 'PATCH', { status: 'DISTRIBUTED', recipient: '省级单位' }, 404);
+  await call(`/analytics/reports/${own.id}`, cityToken, 'GET', undefined, 404);
+  await call('/analytics/reports', provinceToken, 'POST', { title: '倒置周期', reportType: 'MONTHLY', category: 'OPERATIONS', periodStart: '2026-10-28', periodEnd: '2026-09-29' }, 400);
+  const boundary = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).format(new Date());
+  const today = await call(`/analytics/reports?q=${run}&generatedFrom=${boundary}&generatedTo=${boundary}`, provinceToken);
+  assert.equal(today.total, 12);
+  checks.push('真实API：单位与周期组合筛选、上海日期边界、属地隔离，原登记写入接口已撤下');
+
+  browser = await chromium.launch({ channel: 'chrome', headless: false });
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1120 }, reducedMotion: 'reduce', acceptDownloads: true });
+  context.setDefaultTimeout(15000);
+  const page = await context.newPage();
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(base + '/login');
+  await page.getByLabel('账号', { exact: true }).fill('admin');
+  await page.getByLabel('密码', { exact: true }).fill(password);
+  await page.getByRole('button', { name: '登录', exact: true }).click();
+  await page.waitForURL('**/province/overview');
+  await page.goto(`${base}/province/reports?q=${run}`);
+  await expect(page.getByRole('heading', { name: '监管报告列表', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: '统计分析功能', exact: true })).toHaveCount(0);
+  await expect(page.getByText('按生成时间倒序 · 可查看省级与已开通地市报告', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('columnheader', { name: '分发登记', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '登记分发', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: '分发登记', exact: true })).toHaveCount(0);
+  await expect(page.locator('.report-list-table .el-table__body tbody tr')).toHaveCount(10); await ready(page);
+  await screenshot(page, '01-library');
+  await page.locator('.report-pagination .el-pager li').filter({ hasText: /^2$/ }).click();
+  await expect(page.locator('.report-list-table .el-table__body tbody tr')).toHaveCount(2); await ready(page);
+  checks.push('列表使用服务端分页，12份验收报告分页为10+2');
+  const localRow = page.locator('.report-list-table .el-table__body tbody tr').filter({ hasText: local.title });
+  await expect(localRow.getByRole('button', { name: '登记分发', exact: true })).toHaveCount(0);
+  await localRow.getByRole('button', { name: '查看', exact: true }).click();
+  await expect(page.getByRole('heading', { name: local.title, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '三、安全态势', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '登记分发', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: '返回报告列表', exact: true }).click(); await ready(page);
+  await expect(page).toHaveURL(/page=2/);
+  checks.push('属地报告只读；按分类显示章节；返回列表保留页码和筛选');
+
+  await page.goto(`${base}/province/reports?reportId=${own.id}`);
+  await expect(page.getByRole('heading', { name: own.title, exact: true })).toBeVisible();
+  await page.locator('.analytics-chart canvas').waitFor();
+  await screenshot(page, '02-preview');
+  const saved = (await call(`/analytics/reports/${own.id}`, provinceToken)).summary;
+  await page.reload(); await expect(page.getByRole('heading', { name: own.title, exact: true })).toBeVisible();
+  const downloadEvent = page.waitForEvent('download');
+  await page.getByRole('button', { name: '导出 CSV', exact: true }).click();
+  const download = await downloadEvent; await download.saveAs(path.join(output, 'report.csv'));
+  assert(fs.readFileSync(path.join(output, 'report.csv'), 'utf8').includes('自主运行里程占比(%)'));
+  await expect(page.getByRole('button', { name: '登记分发', exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('分发登记信息')).toHaveCount(0);
+  assert(!fs.readFileSync(path.join(output, 'report.csv'), 'utf8').includes('分发'));
+  await page.reload(); await expect(page.getByRole('heading', { name: own.title, exact: true })).toBeVisible();
+  const after = await call(`/analytics/reports/${own.id}`, provinceToken);
+  assert.deepEqual(after.summary, saved);
+  await call(`/analytics/reports/${own.id}`, provinceToken, 'PATCH', { status: 'DISTRIBUTED', recipient: '原登记入口' }, 404);
+  checks.push('页内页签、指定说明和所有分发登记界面已移除；预览刷新、CSV下载和快照正常');
+  for (const width of [1024, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.getByRole('heading', { name: own.title, exact: true })).toBeVisible();
+    await page.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth + 1);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
+    await screenshot(page, `preview-${width}`);
+    if (overflow) console.log(JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('.report-page *')].filter(element => element.getBoundingClientRect().right > innerWidth + 1).slice(0, 20).map(element => ({ tag: element.tagName, class: element.className, right: element.getBoundingClientRect().right, width: element.getBoundingClientRect().width }))), null, 2));
+    assert.equal(overflow, false, `Preview overflows at ${width}px`);
+  }
+  checks.push('1024与390宽度下预览布局无页面横向溢出');
+  await page.goto(`${base}/province/reports?q=${run}`); await ready(page);
+  await page.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth + 1);
+  await screenshot(page, 'library-390');
+  await page.getByRole('button', { name: '生成报告', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '生成监管报告', exact: true })).toBeVisible();
+  await page.waitForFunction(() => {
+    const dialog = document.querySelector('.report-form-dialog');
+    const box = dialog?.getBoundingClientRect();
+    return box && box.left >= 0 && box.right <= innerWidth && dialog.scrollWidth <= dialog.clientWidth + 1;
+  });
+  await expect(page.getByRole('dialog', { name: '生成监管报告', exact: true }).getByRole('button', { name: '生成并预览', exact: true })).toBeVisible();
+  await screenshot(page, 'create-390');
+  await page.getByRole('dialog', { name: '生成监管报告', exact: true }).getByRole('button', { name: '取消', exact: true }).click();
+  await page.setViewportSize({ width: 1600, height: 1120 });
+  await page.getByRole('group', { name: '周期类型', exact: true }).getByText('全部周期', { exact: true }).click();
+  await page.getByRole('option', { name: '月报', exact: true }).click();
+  await page.getByRole('button', { name: '查询', exact: true }).click();
+  await expect(page.locator('.report-list-table .el-table__body tbody tr')).toHaveCount(5); await ready(page);
+  checks.push('窄屏列表及生成表单可用，界面周期筛选与真实API联动');
+  await page.goto(base + '/province/reports'); await ready(page);
+  await page.getByRole('button', { name: '生成报告', exact: true }).click();
+  let dialog = page.getByRole('dialog', { name: '生成监管报告', exact: true });
+  await dialog.getByLabel('报告名称', { exact: true }).fill(run + '页面生成报告');
+  await screenshot(page, '03-create');
+  await dialog.getByRole('button', { name: '取消', exact: true }).click();
+  await page.reload(); await page.getByRole('button', { name: '生成报告', exact: true }).click();
+  dialog = page.getByRole('dialog', { name: '生成监管报告', exact: true });
+  await expect(dialog.getByLabel('报告名称', { exact: true })).toHaveValue(run + '页面生成报告');
+  await dialog.getByLabel('报告名称', { exact: true }).fill('');
+  await dialog.getByRole('button', { name: '生成并预览', exact: true }).click();
+  await expect(dialog.getByText('请填写报告名称', { exact: true })).toBeVisible();
+  await dialog.getByLabel('报告名称', { exact: true }).fill(run + '页面生成报告');
+  const createdResponse = page.waitForResponse(response => response.url().endsWith('/api/analytics/reports') && response.request().method() === 'POST');
+  await dialog.getByRole('button', { name: '生成并预览', exact: true }).click();
+  const created = (await (await createdResponse).json()).data; ids.push(created.id);
+  await expect(page.getByRole('heading', { name: run + '页面生成报告', exact: true })).toBeVisible();
+  assert.equal(await page.evaluate(id => localStorage.getItem('wrc-report-draft-' + id), me.id), null);
+  checks.push('表单内容在关闭与刷新后恢复，必填验证，真实生成后进入预览并清除内容缓存');
+
+  await page.goto(`${base}/province/reports?q=不存在${run}`);
+  await expect(page.getByText('没有符合条件的报告', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '清除筛选', exact: true }).click(); await ready(page);
+  await page.route('**/api/analytics/reports?**', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: '验收模拟服务不可用' }) }));
+  await page.getByRole('button', { name: '查询', exact: true }).click();
+  await expect(page.getByText('报告列表暂时无法加载', { exact: true })).toBeVisible();
+  await expect(page.getByText('还没有生成报告', { exact: true })).toHaveCount(0);
+  await page.unroute('**/api/analytics/reports?**');
+  await page.getByRole('button', { name: '重试', exact: true }).click();
+  await expect(page.locator('.report-list-table')).toBeVisible();
+  checks.push('无结果可清除条件，接口失败不伪装空列表，重试恢复');
+  await page.goto(`${base}/province/reports?reportId=missing-${run}`);
+  await expect(page.getByRole('heading', { name: '报告暂时无法加载', exact: true })).toBeVisible();
+  await expect(page.getByLabel('报告正文')).toHaveCount(0);
+  checks.push('预览读取失败不展示零值报告');
+  assert.deepEqual(errors, []);
+  fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify({ passed: true, checks, errors }, null, 2));
+  console.log(JSON.stringify({ passed: true, checks, errors, output }, null, 2));
+})().catch(error => { console.error(error.stack); process.exitCode = 1; }).finally(async () => {
+  if (browser) await browser.close(); if (http) await http.dispose();
+  await prisma.auditLog.deleteMany({ where: { objectId: { in: ids } } });
+  await prisma.regulatoryReport.deleteMany({ where: { id: { in: ids } } });
+  await prisma.$disconnect();
+});

@@ -1,0 +1,11 @@
+ALTER TABLE "VehicleLicense" ADD COLUMN "licenseType" TEXT NOT NULL DEFAULT 'LEGACY';
+ALTER TABLE "VehicleLicense" ADD COLUMN "conditionsJson" TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE "VehicleLicense" ADD COLUMN "historyJson" TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE "VehicleLicense" ADD COLUMN "sourceApplicationId" TEXT;
+ALTER TABLE "VehicleLicense" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE "AdmissionApplication" ADD COLUMN "detailsJson" TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE "AdmissionApplication" ADD COLUMN "materialsJson" TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE "ApprovalHistory" ADD COLUMN "snapshotJson" TEXT;
+ALTER TABLE "OperationRegion" ADD COLUMN "historyJson" TEXT NOT NULL DEFAULT '[]';
+UPDATE "VehicleLicense" SET "sourceApplicationId" = (SELECT "applicationId" FROM "ApprovalResult" WHERE "licenseId" = "VehicleLicense"."id" LIMIT 1);
+UPDATE "VehicleLicense" SET "licenseType" = 'ROAD_TEST' WHERE "sourceApplicationId" IN (SELECT "id" FROM "AdmissionApplication" WHERE "applicationType" = 'ROAD_TEST');

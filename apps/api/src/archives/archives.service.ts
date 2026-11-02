@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { Prisma } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
 import { AuthUser } from '../auth/auth.types';
+import { isScopedAdministrator } from '../auth/workspace-access';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ArchivePageQueryDto, CreateLicenseDto, CreateManufacturerDto, CreateQualificationDto, CreateVehicleDto,
@@ -13,17 +14,17 @@ import {
 export class ArchivesService {
   constructor(private prisma: PrismaService, private auth: AuthService) {}
 
-  private isSuper(user: AuthUser) { return user.roles.some((role) => role.code === 'SUPER_ADMIN'); }
+  private isSuper(user: AuthUser) { return isScopedAdministrator(user); }
   private vehicleScope(user: AuthUser): Prisma.VehicleWhereInput {
     if (user.portal === 'ENTERPRISE') {
       if (!user.enterpriseId) throw new ForbiddenException('企业账号尚未关联企业主体');
       return { enterpriseId: user.enterpriseId };
     }
-    return this.isSuper(user) ? {} : { organizationId: user.organizationId ?? '__none__' };
+    return this.isSuper(user) ? {} : { organizationId: { in: user.scopeOrganizationIds ?? [user.organizationId ?? '__none__'] } };
   }
   private enterpriseScope(user: AuthUser): Prisma.EnterpriseWhereInput {
     if (user.portal === 'ENTERPRISE') return { id: user.enterpriseId ?? '__none__' };
-    return this.isSuper(user) ? {} : { organizationId: user.organizationId ?? '__none__' };
+    return this.isSuper(user) ? {} : { organizationId: { in: user.scopeOrganizationIds ?? [user.organizationId ?? '__none__'] } };
   }
   private page(query: ArchivePageQueryDto) {
     return { skip: (query.page - 1) * query.pageSize, take: query.pageSize };
@@ -130,7 +131,8 @@ export class ArchivesService {
     return {
       ...this.vehicleScope(user), deletedAt: null, status: query.status, enterpriseId: user.portal === 'ENTERPRISE' ? user.enterpriseId ?? '__none__' : query.enterpriseId,
       modelId: query.modelId, onlineStatus: query.onlineStatus,
-      OR: query.q ? [{ name: { contains: query.q } }, { businessNo: { contains: query.q } }, { vin: { contains: query.q } }, { deviceNo: { contains: query.q } }, { licenses: { some: { licenseNo: { contains: query.q } } } }] : undefined,
+      vehicleType: query.vehicleType, operationScene: query.operationScene,
+      OR: query.q ? [{ name: { contains: query.q } }, { businessNo: { contains: query.q } }, { unifiedCode: { contains: query.q } }, { vin: { contains: query.q } }, { deviceNo: { contains: query.q } }, { licenses: { some: { licenseNo: { contains: query.q } } } }] : undefined,
     };
   }
   async vehicles(user: AuthUser, query: ArchivePageQueryDto) {
@@ -154,15 +156,26 @@ export class ArchivesService {
     return item;
   }
   async createVehicle(user: AuthUser, dto: CreateVehicleDto) {
-    await this.requireModel(dto.modelId);
+    const model = await this.requireModel(dto.modelId);
     const enterpriseId = user.portal === 'ENTERPRISE' ? user.enterpriseId ?? undefined : dto.enterpriseId;
     if (!enterpriseId) throw new BadRequestException('请选择所属企业');
     const enterprise = await this.prisma.enterprise.findFirst({ where: { id: enterpriseId, ...this.enterpriseScope(user), status: 'ACTIVE' } });
     if (!enterprise) throw new ForbiddenException('企业不存在或不在当前数据范围内');
+    const year = new Date().getFullYear();
+    const organization = await this.prisma.organization.findUnique({ where: { id: enterprise.organizationId } });
+    const workspace = organization?.workspaceId ? await this.prisma.cityWorkspace.findUnique({ where: { id: organization.workspaceId } }) : null;
+    const prefix = `${workspace?.cityCode ?? user.workspace?.cityCode ?? '370000'}-FV-${year}-`;
+    const sequence = await this.prisma.vehicle.count({ where: { unifiedCode: { startsWith: prefix } } }) + 1;
+    const body = `${year}${String(sequence).padStart(5, '0')}`;
+    const weighted = [...body].reduce((sum, char, index) => sum + Number(char) * ((index % 6) + 2), 0);
+    const remainder = weighted % 11;
+    const unifiedCode = `${prefix}${String(sequence).padStart(5, '0')}-${remainder === 10 ? 'X' : remainder}`;
     const item = await this.prisma.$transaction(async (tx) => {
       const vehicle = await tx.vehicle.create({ data: {
         businessNo: dto.businessNo, vin: dto.vin, deviceNo: dto.deviceNo, name: dto.name, modelId: dto.modelId,
         enterpriseId, organizationId: enterprise.organizationId, color: dto.color,
+        unifiedCode, unifiedCodeIssuedAt: new Date(), vehicleType: dto.vehicleType ?? model.vehicleType,
+        operationScene: dto.operationScene ?? 'URBAN_DELIVERY', upperEquipment: dto.upperEquipment,
         manufactureDate: dto.manufactureDate ? new Date(dto.manufactureDate) : undefined,
         serviceStartDate: dto.serviceStartDate ? new Date(dto.serviceStartDate) : undefined,
       } });
@@ -177,6 +190,7 @@ export class ArchivesService {
     if (dto.modelId) await this.requireModel(dto.modelId);
     const data: Prisma.VehicleUpdateInput = {
       businessNo: dto.businessNo, vin: dto.vin, deviceNo: dto.deviceNo, name: dto.name, color: dto.color,
+      vehicleType: dto.vehicleType, operationScene: dto.operationScene, upperEquipment: dto.upperEquipment,
       manufactureDate: dto.manufactureDate ? new Date(dto.manufactureDate) : undefined,
       serviceStartDate: dto.serviceStartDate ? new Date(dto.serviceStartDate) : undefined,
       model: dto.modelId ? { connect: { id: dto.modelId } } : undefined,

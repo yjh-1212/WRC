@@ -1,0 +1,8 @@
+import { CityAnalysisService } from './city-analysis.service';
+describe('Municipal report snapshot compatibility',()=>{
+ const service=new CityAnalysisService({} as any,{} as any),user:any={};
+ const record:any={businessNo:'RPT-1',title:'历史报表',periodStart:new Date('2026-05-01T00:00:00Z'),periodEnd:new Date('2026-05-31T00:00:00Z'),generatedAt:new Date(),generatedByName:'管理员',organization:{name:'济南市'},summary:{operations:{kpis:{mileage:120,trips:3,durationHours:10}},safety:{kpis:{alerts:10,openAlerts:3,accidents:1,violations:2,closureRate:70}}}};
+ it('preserves known legacy figures without inventing a unified event total',async()=>{jest.spyOn(service,'report').mockResolvedValue(record);const file=await service.exportReport(user,'r');expect(file.content).toContain('安全告警(条，历史口径)","10');expect(file.content).toContain('已闭环告警(条，历史口径)","7');expect(file.content).toContain('违规记录(条)","2');expect(file.content).not.toContain('事件数(起)","13');});
+ it('exports an absent historical section as unknown instead of failing or fabricating zeros',async()=>{jest.spyOn(service,'report').mockResolvedValue({...record,summary:{operations:{}}});const file=await service.exportReport(user,'r');expect(file.content).toContain('运行里程(km)","—');});
+ it('uses the stored enterprise scope and snapshot rather than live metrics',async()=>{jest.spyOn(service,'report').mockResolvedValue({...record,summary:{...record.summary,scopeName:'指定企业'}});const recompute=jest.spyOn(service,'operations');const file=await service.exportReport(user,'r');expect(file.content).toContain('统计范围","指定企业');expect(recompute).not.toHaveBeenCalled();});
+});

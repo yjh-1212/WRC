@@ -1,8 +1,9 @@
-import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class AnalyticsQueryDto {
+  @IsOptional() @IsString() workspaceId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() q?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() organizationId?: string;
@@ -14,6 +15,12 @@ export class AnalyticsQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsDateString() to?: string;
   @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
   @ApiPropertyOptional({ default: 20 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) pageSize = 20;
+}
+
+export class ReportQueryDto extends AnalyticsQueryDto {
+  @ApiPropertyOptional() @IsOptional() @IsIn(['DAILY', 'WEEKLY', 'MONTHLY', 'SPECIAL']) reportType?: string;
+  @ApiPropertyOptional() @IsOptional() @IsDateString() generatedFrom?: string;
+  @ApiPropertyOptional() @IsOptional() @IsDateString() generatedTo?: string;
 }
 
 export class CreateEvaluationTaskDto {
@@ -64,9 +71,4 @@ export class CreateReportDto {
   @ApiProperty() @IsDateString() periodStart!: string;
   @ApiProperty() @IsDateString() periodEnd!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() recipient?: string;
-}
-
-export class UpdateReportDto extends PartialType(CreateReportDto) {
-  @ApiPropertyOptional() @IsOptional() @IsIn(['GENERATED', 'DISTRIBUTED']) status?: string;
 }

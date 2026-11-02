@@ -1,5 +1,21 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'; import { api } from '../api'; import type { PageData } from '../types'; import PageHeader from '../components/PageHeader.vue'; import { RefreshCw, Search } from 'lucide-vue-next';
+import QueryPanel from '../components/QueryPanel.vue';
+import QueryField from '../components/QueryField.vue';
+import ListPanel from '../components/ListPanel.vue';
+import { onMounted, ref, watch } from 'vue'; import { api } from '../api'; import type { PageData } from '../types'; import PageHeader from '../components/PageHeader.vue'; import { Search } from 'lucide-vue-next';
 const rows=ref<any[]>([]),total=ref(0),loading=ref(false),error=ref(''),q=ref(''),status=ref('');let timer:number|undefined;async function load(){loading.value=true;error.value='';try{const params=new URLSearchParams({page:'1',pageSize:'50'});if(q.value)params.set('q',q.value);if(status.value)params.set('status',status.value);const d=await api<PageData<any>>(`/system/enterprises?${params}`);rows.value=d.items;total.value=d.total;}catch(e){error.value=e instanceof Error?e.message:'加载失败';}finally{loading.value=false;}}watch([q,status],()=>{clearTimeout(timer);timer=window.setTimeout(load,180)});onMounted(load);
+
+function resetQueryFilters() {
+  q.value = '';
+  status.value = '';
+  load();
+}
 </script>
-<template><PageHeader title="企业账号" description="查看企业主体、监管归属与已关联登录账号。" :count="total"><el-button :icon="RefreshCw" @click="load">刷新</el-button></PageHeader><div class="table-toolbar"><el-input v-model="q" :prefix-icon="Search" clearable placeholder="搜索企业、编号或信用代码"/><el-select v-model="status" clearable placeholder="全部状态"><el-option label="正常" value="ACTIVE"/><el-option label="停用" value="INACTIVE"/></el-select></div><div v-if="error" class="error-state"><span>{{error}}</span><el-button @click="load">重试</el-button></div><el-table v-else v-loading="loading" :data="rows" empty-text="暂无企业"><el-table-column label="企业"><template #default="{row}"><div class="identity-cell"><strong>{{row.name}}</strong><span>{{row.businessNo}}</span></div></template></el-table-column><el-table-column label="统一社会信用代码" prop="creditCode" min-width="210"/><el-table-column label="监管机构" min-width="180"><template #default="{row}">{{row.organization.name}}</template></el-table-column><el-table-column label="账号数" width="90"><template #default="{row}">{{row._count.users}}</template></el-table-column><el-table-column label="状态" width="100"><template #default="{row}"><span class="status-mark" :class="row.status.toLowerCase()"><i></i>{{row.status==='ACTIVE'?'正常':'停用'}}</span></template></el-table-column></el-table></template>
+<template><PageHeader title="企业账号" description="查看企业主体、监管归属与已关联登录账号。" :count="total" /><QueryPanel :loading="loading" @search="load" @reset="resetQueryFilters">
+<QueryField label="关键词" keyword><el-input aria-label="关键词" v-model="q" :prefix-icon="Search" clearable placeholder="搜索企业、编号或信用代码"/></QueryField>
+<QueryField label="状态"><el-select aria-label="状态" v-model="status" clearable placeholder="全部状态"><el-option label="正常" value="ACTIVE"/><el-option label="停用" value="INACTIVE"/></el-select></QueryField>
+</QueryPanel>
+<ListPanel title="企业账号列表" :total="error ? undefined : (total)">
+<div v-if="error" class="error-state"><span>{{error}}</span><el-button @click="load">重试</el-button></div><el-table v-else v-loading="loading" :data="rows" empty-text="暂无企业"><el-table-column label="企业"><template #default="{row}"><div class="identity-cell"><strong>{{row.name}}</strong><span>{{row.businessNo}}</span></div></template></el-table-column><el-table-column label="统一社会信用代码" prop="creditCode" min-width="210"/><el-table-column label="监管机构" min-width="180"><template #default="{row}">{{row.organization.name}}</template></el-table-column><el-table-column label="账号数" width="90"><template #default="{row}">{{row._count.users}}</template></el-table-column><el-table-column label="状态" width="100"><template #default="{row}"><span class="status-mark" :class="row.status.toLowerCase()"><i></i>{{row.status==='ACTIVE'?'正常':'停用'}}</span></template></el-table-column></el-table>
+</ListPanel>
+</template>

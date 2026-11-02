@@ -11,6 +11,8 @@ import { ApiExceptionFilter } from './common/api-exception.filter';
 import { ApiResponseInterceptor } from './common/api-response.interceptor';
 import { RequestLogInterceptor } from './common/request-log.interceptor';
 import { validationExceptionFactory } from './common/validation';
+import { WorkspaceScopeInterceptor } from './common/workspace-scope.interceptor';
+import { PrismaService } from './prisma/prisma.service';
 
 function serveWebApp(app: NestExpressApplication) {
   const webDist = join(__dirname, '..', '..', 'web', 'dist');
@@ -71,7 +73,7 @@ async function bootstrap() {
     exceptionFactory: validationExceptionFactory,
   }));
   app.useGlobalFilters(new ApiExceptionFilter());
-  app.useGlobalInterceptors(new RequestLogInterceptor(), new ApiResponseInterceptor());
+  app.useGlobalInterceptors(new WorkspaceScopeInterceptor(app.get(PrismaService)), new RequestLogInterceptor(), new ApiResponseInterceptor());
 
   const config = new DocumentBuilder()
     .setTitle('无人快递车监管平台 API')

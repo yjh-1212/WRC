@@ -2,15 +2,16 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { Prisma } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
 import { AuthUser } from '../auth/auth.types';
+import { isScopedAdministrator } from '../auth/workspace-access';
 import { PrismaService } from '../prisma/prisma.service';
-import { AnalyticsQueryDto, CreateAppealDto, CreateEvaluationTaskDto, CreateReportDto, ReviewAppealDto, SaveReconstructionDto, UpdateIndicatorDto, UpdateReportDto, UpdateRuleDto } from './dto';
+import { AnalyticsQueryDto, CreateAppealDto, CreateEvaluationTaskDto, CreateReportDto, ReportQueryDto, ReviewAppealDto, SaveReconstructionDto, UpdateIndicatorDto, UpdateRuleDto } from './dto';
 
 @Injectable()
 export class AnalyticsService {
   constructor(private prisma: PrismaService, private auth: AuthService) {}
 
-  private isSuper(user: AuthUser) { return user.roles.some((role) => role.code === 'SUPER_ADMIN'); }
-  private organizationRelation(user: AuthUser) { return { is: { OR: [{ id: user.organizationId ?? '__none__' }, { parentId: user.organizationId ?? '__none__' }] } }; }
+  private isSuper(user: AuthUser) { return isScopedAdministrator(user); }
+  private organizationRelation(user: AuthUser) { return { is: { OR: [{ id: { in: user.scopeOrganizationIds ?? [user.organizationId ?? '__none__'] } }, { parentId: user.organizationId ?? '__none__' }] } }; }
   private scoped(user: AuthUser) {
     if (user.portal === 'ENTERPRISE') {
       if (!user.enterpriseId) throw new ForbiddenException('企业账号尚未关联企业主体');
@@ -42,7 +43,7 @@ export class AnalyticsService {
   async options(user: AuthUser) {
     const [enterprises, organizations, vehicles, accidents] = await this.prisma.$transaction([
       this.prisma.enterprise.findMany({ where: { ...this.enterpriseScoped(user), status: 'ACTIVE' }, orderBy: { name: 'asc' }, select: { id: true, name: true, organizationId: true } }),
-      this.prisma.organization.findMany({ where: this.isSuper(user) ? {} : { OR: [{ id: user.organizationId ?? '__none__' }, { parentId: user.organizationId ?? '__none__' }] }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+      this.prisma.organization.findMany({ where: this.isSuper(user) ? {} : { OR: [{ id: { in: user.scopeOrganizationIds ?? [user.organizationId ?? '__none__'] } }, { parentId: user.organizationId ?? '__none__' }] }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
       this.prisma.vehicle.findMany({ where: { ...this.scoped(user), deletedAt: null }, orderBy: { name: 'asc' }, select: { id: true, name: true, businessNo: true, enterpriseId: true } }),
       this.prisma.accident.findMany({ where: this.scoped(user), orderBy: { occurredAt: 'desc' }, select: { id: true, businessNo: true, title: true, enterpriseId: true, occurredAt: true } }),
     ]);
@@ -125,7 +126,7 @@ export class AnalyticsService {
   }
 
   async evaluationTasks(user: AuthUser, query: AnalyticsQueryDto) { if (user.portal === 'ENTERPRISE') throw new ForbiddenException('企业账号不能查看评价任务'); const where: Prisma.EvaluationTaskWhereInput = { ...(this.isSuper(user) ? {} : { organization: this.organizationRelation(user) }), status: query.status, OR: query.q ? [{ businessNo: { contains: query.q } }, { name: { contains: query.q } }] : undefined }; const [total, items] = await this.prisma.$transaction([this.prisma.evaluationTask.count({ where }), this.prisma.evaluationTask.findMany({ where, ...this.page(query), orderBy: { periodEnd: 'desc' }, include: { organization: { select: { id: true, name: true } }, evaluations: { include: { enterprise: { select: { id: true, name: true } } }, orderBy: { totalScore: 'asc' } }, _count: { select: { evaluations: true } } } })]); return { page: query.page, pageSize: query.pageSize, total, items }; }
-  async createEvaluationTask(user: AuthUser, dto: CreateEvaluationTaskDto) { if (user.portal === 'ENTERPRISE') throw new ForbiddenException('企业账号不能生成评价任务'); const organizationId = dto.organizationId ?? user.organizationId; if (!organizationId) throw new BadRequestException('请选择评价组织'); const organization = await this.prisma.organization.findFirst({ where: { id: organizationId, ...(this.isSuper(user) ? {} : { OR: [{ id: user.organizationId ?? '__none__' }, { parentId: user.organizationId ?? '__none__' }] }) } }); if (!organization) throw new ForbiddenException('评价组织不在当前范围'); const from = new Date(dto.periodStart), to = new Date(`${dto.periodEnd}T23:59:59.999Z`); const [enterprises, indicators] = await Promise.all([this.prisma.enterprise.findMany({ where: { status: 'ACTIVE', organization: { is: { OR: [{ id: organizationId }, { parentId: organizationId }] } } } }), this.prisma.evaluationIndicator.findMany({ where: { organizationId, status: 'ACTIVE' }, include: { rules: { where: { status: 'ACTIVE' }, orderBy: { orderNo: 'asc' } } } })]); if (!indicators.length) throw new BadRequestException('当前组织尚未配置有效评价指标'); const weight = indicators.reduce((sum, item) => sum + item.weight, 0); if (Math.abs(weight - 100) > .01) throw new BadRequestException(`有效评价指标权重合计应为 100，当前为 ${weight}`); const task = await this.prisma.evaluationTask.create({ data: { businessNo: this.businessNo('EVT'), name: dto.name, periodType: dto.periodType, periodStart: from, periodEnd: to, organizationId, status: 'RUNNING', createdById: user.id, createdByName: user.displayName } }); for (const enterprise of enterprises) { const score = await this.scoreEnterprise(enterprise.id, from, to, indicators); await this.prisma.enterpriseEvaluation.create({ data: { businessNo: this.businessNo('EVA'), taskId: task.id, enterpriseId: enterprise.id, organizationId: enterprise.organizationId, totalScore: score.totalScore, grade: score.grade, riskLevel: score.riskLevel, safetyScore: score.safetyScore, complianceScore: score.complianceScore, operationScore: score.operationScore, breakdownJson: JSON.stringify(score.breakdown), conclusion: `${enterprise.name}本周期综合评价为 ${score.grade} 级，风险等级 ${score.riskLevel}。` } }); } const item = await this.prisma.evaluationTask.update({ where: { id: task.id }, data: { status: 'COMPLETED', generatedAt: new Date() } }); await this.auth.audit(user, 'analytics', 'evaluationTask', item.id, 'GENERATE', { enterprises: enterprises.length }); return item; }
+  async createEvaluationTask(user: AuthUser, dto: CreateEvaluationTaskDto) { if (user.portal === 'ENTERPRISE') throw new ForbiddenException('企业账号不能生成评价任务'); const organizationId = dto.organizationId ?? user.organizationId; if (!organizationId) throw new BadRequestException('请选择评价组织'); const organization = await this.prisma.organization.findFirst({ where: { id: organizationId, ...(this.isSuper(user) ? {} : { OR: [{ id: { in: user.scopeOrganizationIds ?? [user.organizationId ?? '__none__'] } }, { parentId: user.organizationId ?? '__none__' }] }) } }); if (!organization) throw new ForbiddenException('评价组织不在当前范围'); const from = new Date(dto.periodStart), to = new Date(`${dto.periodEnd}T23:59:59.999Z`); const [enterprises, indicators] = await Promise.all([this.prisma.enterprise.findMany({ where: { status: 'ACTIVE', organization: { is: { OR: [{ id: organizationId }, { parentId: organizationId }] } } } }), this.prisma.evaluationIndicator.findMany({ where: { organizationId, status: 'ACTIVE' }, include: { rules: { where: { status: 'ACTIVE' }, orderBy: { orderNo: 'asc' } } } })]); if (!indicators.length) throw new BadRequestException('当前组织尚未配置有效评价指标'); const weight = indicators.reduce((sum, item) => sum + item.weight, 0); if (Math.abs(weight - 100) > .01) throw new BadRequestException(`有效评价指标权重合计应为 100，当前为 ${weight}`); const task = await this.prisma.evaluationTask.create({ data: { businessNo: this.businessNo('EVT'), name: dto.name, periodType: dto.periodType, periodStart: from, periodEnd: to, organizationId, status: 'RUNNING', createdById: user.id, createdByName: user.displayName } }); for (const enterprise of enterprises) { const score = await this.scoreEnterprise(enterprise.id, from, to, indicators); await this.prisma.enterpriseEvaluation.create({ data: { businessNo: this.businessNo('EVA'), taskId: task.id, enterpriseId: enterprise.id, organizationId: enterprise.organizationId, totalScore: score.totalScore, grade: score.grade, riskLevel: score.riskLevel, safetyScore: score.safetyScore, complianceScore: score.complianceScore, operationScore: score.operationScore, breakdownJson: JSON.stringify(score.breakdown), conclusion: `${enterprise.name}本周期综合评价为 ${score.grade} 级，风险等级 ${score.riskLevel}。` } }); } const item = await this.prisma.evaluationTask.update({ where: { id: task.id }, data: { status: 'COMPLETED', generatedAt: new Date() } }); await this.auth.audit(user, 'analytics', 'evaluationTask', item.id, 'GENERATE', { enterprises: enterprises.length }); return item; }
   async publishEvaluationTask(user: AuthUser, id: string) { if (user.portal === 'ENTERPRISE') throw new ForbiddenException('企业账号不能发布评价'); const task = await this.prisma.evaluationTask.findFirst({ where: { id, ...(this.isSuper(user) ? {} : { organization: this.organizationRelation(user) }) } }); if (!task) throw new NotFoundException('评价任务不存在或不在当前范围'); if (task.status !== 'COMPLETED') throw new BadRequestException('仅已计算完成的任务可以发布'); const now = new Date(); await this.prisma.$transaction([this.prisma.evaluationTask.update({ where: { id }, data: { status: 'PUBLISHED', publishedAt: now } }), this.prisma.enterpriseEvaluation.updateMany({ where: { taskId: id }, data: { status: 'PUBLISHED', publishedAt: now } })]); await this.auth.audit(user, 'analytics', 'evaluationTask', id, 'PUBLISH'); return { published: true }; }
   async evaluations(user: AuthUser, query: AnalyticsQueryDto) {
     const where: Prisma.EnterpriseEvaluationWhereInput = { ...this.scoped(user), enterpriseId: user.portal === 'ENTERPRISE' ? user.enterpriseId ?? '__none__' : query.enterpriseId, status: user.portal === 'ENTERPRISE' ? 'PUBLISHED' : query.status, riskLevel: query.level, OR: query.q ? [{ businessNo: { contains: query.q } }, { enterprise: { name: { contains: query.q } } }, { task: { name: { contains: query.q } } }] : undefined };
@@ -138,14 +139,121 @@ export class AnalyticsService {
   async evaluation(user: AuthUser, id: string) { const item = await this.prisma.enterpriseEvaluation.findFirst({ where: { id, ...this.scoped(user), ...(user.portal === 'ENTERPRISE' ? { status: 'PUBLISHED' } : {}) }, include: { enterprise: true, organization: true, task: true, appeals: { orderBy: { createdAt: 'desc' } } } }); if (!item) throw new NotFoundException('评价结果不存在或不在当前数据范围内'); return { ...item, breakdown: JSON.parse(item.breakdownJson), breakdownJson: undefined }; }
   async createAppeal(user: AuthUser, id: string, dto: CreateAppealDto) { if (user.portal !== 'ENTERPRISE') throw new ForbiddenException('仅企业账号可以提交评价申诉'); const evaluation = await this.prisma.enterpriseEvaluation.findFirst({ where: { id, enterpriseId: user.enterpriseId ?? '__none__', status: 'PUBLISHED' } }); if (!evaluation) throw new NotFoundException('可申诉评价结果不存在'); const open = await this.prisma.evaluationAppeal.findFirst({ where: { evaluationId: id, status: 'SUBMITTED' } }); if (open) throw new BadRequestException('该评价已有待复核申诉'); const item = await this.prisma.evaluationAppeal.create({ data: { businessNo: this.businessNo('APL'), evaluationId: id, enterpriseId: evaluation.enterpriseId, organizationId: evaluation.organizationId, reason: dto.reason, evidence: dto.evidence, submittedById: user.id, submittedByName: user.displayName } }); await this.auth.audit(user, 'analytics', 'evaluationAppeal', item.id, 'SUBMIT'); return item; }
   async appeals(user: AuthUser, query: AnalyticsQueryDto) { const where: Prisma.EvaluationAppealWhereInput = { ...this.scoped(user), enterpriseId: user.portal === 'ENTERPRISE' ? user.enterpriseId ?? '__none__' : query.enterpriseId, status: query.status, OR: query.q ? [{ businessNo: { contains: query.q } }, { enterprise: { name: { contains: query.q } } }] : undefined }; const [total, items] = await this.prisma.$transaction([this.prisma.evaluationAppeal.count({ where }), this.prisma.evaluationAppeal.findMany({ where, ...this.page(query), orderBy: { createdAt: 'desc' }, include: { enterprise: { select: { id: true, name: true } }, evaluation: { include: { task: { select: { name: true, periodStart: true, periodEnd: true } } } } } })]); return { page: query.page, pageSize: query.pageSize, total, items }; }
-  async reviewAppeal(user: AuthUser, id: string, dto: ReviewAppealDto) { if (user.portal === 'ENTERPRISE') throw new ForbiddenException('企业账号不能复核申诉'); const current = await this.prisma.evaluationAppeal.findFirst({ where: { id, ...(this.isSuper(user) ? {} : { organization: this.organizationRelation(user) }) } }); if (!current) throw new NotFoundException('申诉不存在或不在当前范围'); if (current.status !== 'SUBMITTED') throw new BadRequestException('该申诉已完成复核'); const status = dto.action === 'ACCEPT' ? 'ACCEPTED' : 'REJECTED'; const item = await this.prisma.$transaction(async (tx) => { const appeal = await tx.evaluationAppeal.update({ where: { id }, data: { status, reviewerId: user.id, reviewerName: user.displayName, reviewComment: dto.comment, reviewedAt: new Date() } }); if (status === 'ACCEPTED') await tx.enterpriseEvaluation.update({ where: { id: current.evaluationId }, data: { status: 'UNDER_REVIEW', conclusion: `原评价因申诉受理进入重新核定：${dto.comment}` } }); return appeal; }); await this.auth.audit(user, 'analytics', 'evaluationAppeal', id, dto.action); return item; }
+  async reviewAppeal(user: AuthUser, id: string, dto: ReviewAppealDto) {
+    if (user.portal === 'ENTERPRISE') throw new ForbiddenException('企业账号不能复核申诉');
+    if (!dto.comment.trim()) throw new BadRequestException('请填写申诉复核意见');
+    const current = await this.prisma.evaluationAppeal.findFirst({ where: { id, ...this.scoped(user) } });
+    if (!current) throw new NotFoundException('申诉不存在或不在当前范围');
+    if (current.status !== 'SUBMITTED') throw new BadRequestException('该申诉已完成复核');
+    const status = dto.action === 'ACCEPT' ? 'ACCEPTED' : 'REJECTED';
+    const item = await this.prisma.$transaction(async tx => {
+      const changed = await tx.evaluationAppeal.updateMany({ where: { id, status: 'SUBMITTED' }, data: { status, reviewerId: user.id, reviewerName: user.displayName, reviewComment: dto.comment.trim(), reviewedAt: new Date() } });
+      if (changed.count !== 1) throw new BadRequestException('该申诉已完成复核，请刷新');
+      if (status === 'ACCEPTED') {
+        const evaluation = await tx.enterpriseEvaluation.findFirst({ where: { id: current.evaluationId, ...this.scoped(user) } });
+        if (!evaluation) throw new NotFoundException('评价结果不存在');
+        let history: any[] = []; try { history = JSON.parse(evaluation.historyJson); } catch {}
+        history.push({ action: 'ACCEPT_APPEAL', actorId: user.id, actorName: user.displayName, at: new Date().toISOString(), comment: dto.comment.trim(), previous: { totalScore: evaluation.totalScore, grade: evaluation.grade, breakdown: JSON.parse(evaluation.breakdownJson), evidenceJson: evaluation.evidenceJson, publishedAt: evaluation.publishedAt } });
+        const updated = await tx.enterpriseEvaluation.updateMany({ where: { id: evaluation.id, version: evaluation.version }, data: { status: 'UNDER_REVIEW', version: { increment: 1 }, historyJson: JSON.stringify(history), qualityJson: JSON.stringify([{ metricKey: 'appeal', name: '申诉复核', reason: '申诉已受理，请重新核定数据并计算后再复核发布' }]), reviewedAt: null, reviewedById: null, reviewedByName: null, reviewComment: null, conclusion: `原评价因申诉受理进入重新核定：${dto.comment.trim()}` } });
+        if (updated.count !== 1) throw new BadRequestException('评价已更新，请重新核对');
+      }
+      return tx.evaluationAppeal.findFirst({ where: { id } });
+    });
+    await this.auth.audit(user, 'analytics', 'evaluationAppeal', id, dto.action); return item;
+  }
 
   async profiles(user: AuthUser, query: AnalyticsQueryDto) { const where: Prisma.EnterpriseWhereInput = { ...this.enterpriseScoped(user), id: user.portal === 'ENTERPRISE' ? user.enterpriseId ?? '__none__' : query.enterpriseId, status: 'ACTIVE', name: query.q ? { contains: query.q } : undefined }; const all = await this.prisma.enterprise.findMany({ where, orderBy: { name: 'asc' } }); const items = await Promise.all(all.map((item) => this.profile(user, item.id))); return { page: 1, pageSize: items.length, total: items.length, items }; }
   async profile(user: AuthUser, enterpriseId: string) { const enterprise = await this.assertEnterprise(user, enterpriseId); const [evaluation, vehicleCount, alerts, accidents, violations, offline, records] = await this.prisma.$transaction([this.prisma.enterpriseEvaluation.findFirst({ where: { enterpriseId, status: { in: ['PUBLISHED', 'UNDER_REVIEW'] } }, orderBy: { publishedAt: 'desc' }, include: { task: true } }), this.prisma.vehicle.count({ where: { enterpriseId, deletedAt: null } }), this.prisma.safetyAlert.count({ where: { enterpriseId } }), this.prisma.accident.count({ where: { enterpriseId } }), this.prisma.violation.count({ where: { enterpriseId } }), this.prisma.offlineEvent.count({ where: { enterpriseId } }), this.prisma.operationRecord.aggregate({ where: { enterpriseId }, _sum: { mileage: true, autonomousMiles: true } })]); const mileage = records._sum.mileage ?? 0; const dimensions = evaluation ? { safety: evaluation.safetyScore, compliance: evaluation.complianceScore, operation: evaluation.operationScore, onlineStability: Math.max(0, 100 - offline * 4), emergencyResponse: Math.max(0, 100 - alerts * 2), autonomy: this.round(mileage ? (records._sum.autonomousMiles ?? 0) / mileage * 100 : 0) } : null; const tags = [accidents > 1 ? '事故风险偏高' : '事故控制稳定', violations > 1 ? '合规整改重点' : '合规表现稳定', offline > 1 ? '联网稳定性待提升' : '联网稳定', evaluation?.riskLevel === 'CRITICAL' ? '重点监管' : evaluation?.grade === 'A' ? '示范企业' : '常规监管']; return { enterprise, evaluation: evaluation ? { ...evaluation, breakdown: JSON.parse(evaluation.breakdownJson), breakdownJson: undefined } : null, metrics: { vehicleCount, alerts, accidents, violations, offline, mileage: this.round(mileage) }, dimensions, tags }; }
 
-  async reports(user: AuthUser, query: AnalyticsQueryDto) { const where: Prisma.RegulatoryReportWhereInput = { ...this.scoped(user), enterpriseId: user.portal === 'ENTERPRISE' ? user.enterpriseId ?? '__none__' : query.enterpriseId, category: query.type, status: query.status, OR: query.q ? [{ businessNo: { contains: query.q } }, { title: { contains: query.q } }] : undefined }; const [total, items] = await this.prisma.$transaction([this.prisma.regulatoryReport.count({ where }), this.prisma.regulatoryReport.findMany({ where, ...this.page(query), orderBy: { generatedAt: 'desc' }, include: { enterprise: { select: { id: true, name: true } }, organization: { select: { id: true, name: true } } } })]); return { page: query.page, pageSize: query.pageSize, total, items }; }
-  async report(user: AuthUser, id: string) { const item = await this.prisma.regulatoryReport.findFirst({ where: { id, ...this.scoped(user) }, include: { enterprise: true, organization: true } }); if (!item) throw new NotFoundException('报表不存在或不在当前数据范围内'); return { ...item, summary: JSON.parse(item.summaryJson), summaryJson: undefined }; }
-  async createReport(user: AuthUser, dto: CreateReportDto) { if (user.portal === 'ENTERPRISE' && dto.enterpriseId && dto.enterpriseId !== user.enterpriseId) throw new ForbiddenException('不能生成其他企业报表'); const enterpriseId = user.portal === 'ENTERPRISE' ? user.enterpriseId ?? undefined : dto.enterpriseId; if (enterpriseId) await this.assertEnterprise(user, enterpriseId); const query = Object.assign(new AnalyticsQueryDto(), { from: dto.periodStart, to: dto.periodEnd, enterpriseId }); const [operations, safety] = await Promise.all([this.operationAnalysis(user, query), this.safetyAnalysis(user, query)]); const organizationId = enterpriseId ? (await this.prisma.enterprise.findUniqueOrThrow({ where: { id: enterpriseId } })).organizationId : user.organizationId; if (!organizationId) throw new BadRequestException('当前账号缺少组织归属'); const summary = dto.category === 'OPERATIONS' ? { operations } : dto.category === 'SAFETY' ? { safety } : { operations, safety }; const item = await this.prisma.regulatoryReport.create({ data: { businessNo: this.businessNo('RPT'), reportType: dto.reportType, category: dto.category, title: dto.title, periodStart: new Date(dto.periodStart), periodEnd: new Date(`${dto.periodEnd}T23:59:59.999Z`), enterpriseId, organizationId, summaryJson: JSON.stringify(summary), recipient: dto.recipient, generatedById: user.id, generatedByName: user.displayName } }); await this.auth.audit(user, 'analytics', 'regulatoryReport', item.id, 'GENERATE', { businessNo: item.businessNo }); return item; }
-  async updateReport(user: AuthUser, id: string, dto: UpdateReportDto) { const current = await this.prisma.regulatoryReport.findFirst({ where: { id, ...this.scoped(user) } }); if (!current) throw new NotFoundException('报表不存在或不在当前范围'); const item = await this.prisma.regulatoryReport.update({ where: { id }, data: { recipient: dto.recipient, status: dto.status, distributedAt: dto.status === 'DISTRIBUTED' ? new Date() : undefined } }); await this.auth.audit(user, 'analytics', 'regulatoryReport', id, dto.status === 'DISTRIBUTED' ? 'DISTRIBUTE' : 'UPDATE'); return item; }
-  async exportReport(user: AuthUser, id: string) { const item = await this.report(user, id); const rows: Array<[string, string | number]> = [['报表编号', item.businessNo], ['报表名称', item.title], ['报表类型', item.reportType], ['统计周期', `${this.dateKey(item.periodStart)} 至 ${this.dateKey(item.periodEnd)}`], ['生成机构', item.organization.name], ['生成时间', item.generatedAt.toISOString()]]; const operations = item.summary.operations?.kpis, safety = item.summary.safety?.kpis; if (operations) rows.push(['运行车辆数', operations.vehicles], ['运行次数', operations.trips], ['运行里程(km)', operations.mileage], ['运行时长(h)', operations.durationHours], ['自主运行率(%)', operations.autonomousRate]); if (safety) rows.push(['告警数', safety.alerts], ['事故数', safety.accidents], ['违规数', safety.violations], ['告警闭环率(%)', safety.closureRate]); const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`; return { filename: `${item.businessNo}.csv`, mimeType: 'text/csv;charset=utf-8', content: `\ufeff指标,数值\r\n${rows.map((row) => row.map(escape).join(',')).join('\r\n')}` }; }
+  async reportOptions(user: AuthUser) {
+    const organizations = await this.prisma.organization.findMany({
+      where: { regulatoryReports: { some: this.scoped(user) } },
+      select: { id: true, name: true }, orderBy: { name: 'asc' },
+    });
+    const enterprises = user.accountLevel === 'PROVINCE' ? [] : await this.prisma.enterprise.findMany({
+      where: { ...this.enterpriseScoped(user), status: 'ACTIVE' }, select: { id: true, name: true }, orderBy: { name: 'asc' },
+    });
+    return { organizations, enterprises };
+  }
+
+  async reports(user: AuthUser, query: ReportQueryDto) {
+    const dateBoundary = (value: string, end = false) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new BadRequestException('生成日期请使用年月日格式');
+      return new Date(`${value}T${end ? '23:59:59.999' : '00:00:00.000'}+08:00`);
+    };
+    const generatedAt = query.generatedFrom || query.generatedTo ? {
+      gte: query.generatedFrom ? dateBoundary(query.generatedFrom) : undefined,
+      lte: query.generatedTo ? dateBoundary(query.generatedTo, true) : undefined,
+    } : undefined;
+    if (generatedAt?.gte && generatedAt.lte && generatedAt.gte > generatedAt.lte) throw new BadRequestException('生成日期的开始时间不能晚于结束时间');
+    const where: Prisma.RegulatoryReportWhereInput = { AND: [
+      this.scoped(user),
+      { organizationId: query.organizationId, enterpriseId: query.enterpriseId, category: query.type, reportType: query.reportType,
+        generatedAt, OR: query.q?.trim() ? [{ businessNo: { contains: query.q.trim() } }, { title: { contains: query.q.trim() } }] : undefined },
+    ] };
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.regulatoryReport.count({ where }),
+      this.prisma.regulatoryReport.findMany({ where, ...this.page(query), orderBy: [{ generatedAt: 'desc' }, { id: 'desc' }],
+        select: { id: true, businessNo: true, reportType: true, category: true, title: true, periodStart: true, periodEnd: true,
+          organizationId: true, status: true, recipient: true, generatedByName: true, generatedAt: true, distributedAt: true,
+          enterprise: { select: { id: true, name: true } }, organization: { select: { id: true, name: true } } } }),
+    ]);
+    return { page: query.page, pageSize: query.pageSize, total, items };
+  }
+
+  async report(user: AuthUser, id: string) {
+    const item = await this.prisma.regulatoryReport.findFirst({ where: { id, ...this.scoped(user) }, include: { enterprise: true, organization: true } });
+    if (!item) throw new NotFoundException('报告不存在或不在当前数据范围内');
+    return { ...item, summary: JSON.parse(item.summaryJson), summaryJson: undefined };
+  }
+
+  async createReport(user: AuthUser, dto: CreateReportDto) {
+    if (!dto.title.trim()) throw new BadRequestException('请填写报告名称');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dto.periodStart) || !/^\d{4}-\d{2}-\d{2}$/.test(dto.periodEnd)) throw new BadRequestException('统计周期请使用年月日格式');
+    if (user.accountLevel === 'PROVINCE' && (dto.enterpriseId || dto.category === 'ENTERPRISE')) throw new ForbiddenException('企业专项报告由属地生成，省级可生成全省汇总报告');
+    if (user.portal === 'ENTERPRISE' && dto.enterpriseId && dto.enterpriseId !== user.enterpriseId) throw new ForbiddenException('不能生成其他企业报表');
+    const enterpriseId = user.portal === 'ENTERPRISE' ? user.enterpriseId ?? undefined : dto.enterpriseId;
+    if (enterpriseId) await this.assertEnterprise(user, enterpriseId);
+    const query = Object.assign(new AnalyticsQueryDto(), { from: dto.periodStart, to: dto.periodEnd, enterpriseId });
+    this.dates(query);
+    // Store only the requested sections; a missing section must never become a zero-valued chart.
+    const operations = dto.category === 'SAFETY' ? undefined : await this.operationAnalysis(user, query);
+    const safety = dto.category === 'OPERATIONS' ? undefined : await this.safetyAnalysis(user, query);
+    const organizationId = enterpriseId ? (await this.prisma.enterprise.findUniqueOrThrow({ where: { id: enterpriseId } })).organizationId : user.organizationId;
+    if (!organizationId) throw new BadRequestException('当前账号缺少组织归属');
+    const summary = { ...(operations ? { operations } : {}), ...(safety ? { safety } : {}) };
+    const item = await this.prisma.regulatoryReport.create({ data: {
+      businessNo: this.businessNo('RPT'), reportType: dto.reportType, category: dto.category, title: dto.title.trim(),
+      periodStart: new Date(dto.periodStart), periodEnd: new Date(`${dto.periodEnd}T23:59:59.999Z`),
+      enterpriseId, organizationId, summaryJson: JSON.stringify(summary),
+      generatedById: user.id, generatedByName: user.displayName,
+    } });
+    await this.auth.audit(user, 'analytics', 'regulatoryReport', item.id, 'GENERATE', { businessNo: item.businessNo });
+    return item;
+  }
+
+  async exportReport(user: AuthUser, id: string) {
+    const item = await this.report(user, id);
+    const rows: Array<[string, string | number]> = [
+      ['报告编号', item.businessNo], ['报告名称', item.title], ['报告类型', item.reportType], ['报告分类', item.category],
+      ['统计周期', `${this.dateKey(item.periodStart)} 至 ${this.dateKey(item.periodEnd)}`], ['生成机构', item.organization.name],
+      ['生成人', item.generatedByName], ['生成时间', item.generatedAt.toISOString()],
+    ];
+    const operations = item.summary.operations?.kpis, safety = item.summary.safety?.kpis;
+    if (operations) rows.push(['运行车辆数', operations.vehicles], ['运行次数', operations.trips], ['运行里程(km)', operations.mileage],
+      ['运行时长(h)', operations.durationHours], ['自主运行里程占比(%)', operations.mileage > 0 && Number.isFinite(operations.autonomousRate) && operations.autonomousRate >= 0 && operations.autonomousRate <= 100 ? operations.autonomousRate : '—'],
+      ['累计能耗(kWh)', operations.energyUsed ?? '—']);
+    if (safety) rows.push(['告警数', safety.alerts], ['事故数', safety.accidents], ['违规数', safety.violations],
+      ['告警闭环率(%)', safety.alerts ? safety.closureRate : '—']);
+    if (operations?.mileage > 0 && !(Number.isFinite(operations.autonomousRate) && operations.autonomousRate >= 0 && operations.autonomousRate <= 100)) rows.push(['数据核对说明', '自主运行里程占比口径待核对，请核对源运行记录']);
+    rows.push(['统计口径', '运行车辆按周期去重；自主运行里程占比=自主里程/总里程；报告保存生成时的数据快照']);
+    const escape = (value: string | number) => {
+      const text = String(value ?? '—');
+      return `"${(/^[=+@\-\t\r]/.test(text) ? "'" + text : text).replace(/"/g, '""')}"`;
+    };
+    return { filename: `${item.businessNo}.csv`, mimeType: 'text/csv;charset=utf-8',
+      content: `\ufeff指标,数值\r\n${rows.map(row => row.map(escape).join(',')).join('\r\n')}` };
+  }
+
+
 }

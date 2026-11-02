@@ -1,15 +1,19 @@
 <script setup lang="ts">
+import QueryPanel from '../components/QueryPanel.vue';
+import QueryField from '../components/QueryField.vue';
+import ListPanel from '../components/ListPanel.vue';
+import { useRoute } from 'vue-router';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { Clock3, RadioTower, RefreshCw, Search, WifiOff } from 'lucide-vue-next';
+import { Clock3, RadioTower, Search, WifiOff } from 'lucide-vue-next';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '../api';
 import PageHeader from '../components/PageHeader.vue';
 import { useSessionStore } from '../stores/session';
 import type { PageData } from '../types';
 
-const session = useSessionStore();
+const route=useRoute(),session = useSessionStore();
 const loading = ref(false), scanning = ref(false), error = ref(''), rows = ref<any[]>([]), total = ref(0), page = ref(1);
-const q = ref(''), status = ref(''), enterpriseId = ref('');
+const q = ref(String(route.query.q??'')), status = ref(''), enterpriseId = ref('');
 const options = reactive<any>({ enterprises: [] });
 const summary = reactive({ open: 0, recovered: 0, longestMinutes: 0 });
 const isEnterprise = computed(() => session.user?.portal === 'ENTERPRISE');
@@ -51,24 +55,31 @@ async function act(row: any, action: 'INVESTIGATE' | 'UPDATE_REASON' | 'RECOVER'
   await api(`/safety/offline-events/${row.id}/actions`, { method: 'POST', body: JSON.stringify({ action, comment }) });
   ElMessage.success(`${title}成功`); await load();
 }
+
+function resetQueryFilters() {
+  q.value = '';
+  status.value = '';
+  enterpriseId.value = '';
+  page.value = 1;
+  load();
+}
 </script>
 
 <template>
-  <PageHeader title="离线监管" description="按车辆心跳识别持续离线，贯通发现、原因核实、跟进与恢复确认。" :count="total">
-    <el-button :icon="RefreshCw" :loading="loading" @click="load">刷新</el-button>
-    <el-button v-if="canHandle && !isEnterprise" type="primary" :icon="RadioTower" :loading="scanning" @click="scan">立即扫描</el-button>
-  </PageHeader>
+  <PageHeader title="离线监管" description="按车辆心跳识别持续离线，贯通发现、原因核实、跟进与恢复确认。" :count="total" />
   <div class="safety-metrics compact-metrics">
     <button @click="status = 'OFFLINE'"><WifiOff :size="17"/><span>离线待核实</span><strong>{{ summary.open }}</strong><small>需要确认原因与责任人</small></button>
     <button @click="status = 'RECOVERED'"><span>已恢复</span><strong>{{ summary.recovered }}</strong><small>保留恢复与补传记录</small></button>
     <button><Clock3 :size="17"/><span>当前最长离线</span><strong>{{ durationText(summary.longestMinutes) }}</strong><small>按当前结果集动态计算</small></button>
   </div>
-  <div class="table-toolbar safety-toolbar">
-    <el-input v-model="q" :prefix-icon="Search" clearable placeholder="搜索事件编号、车辆或企业"/>
-    <el-select v-model="status" clearable placeholder="全部状态"><el-option v-for="item in ['OFFLINE','INVESTIGATING','RECOVERED']" :key="item" :label="statusText(item)" :value="item"/></el-select>
-    <el-select v-if="!isEnterprise" v-model="enterpriseId" clearable filterable placeholder="全部企业"><el-option v-for="item in options.enterprises" :key="item.id" :label="item.name" :value="item.id"/></el-select>
-  </div>
-  <div v-if="error" class="error-state"><strong>离线监管暂时无法加载</strong><span>{{ error }}</span><el-button @click="load">重试</el-button></div>
+  <QueryPanel :loading="loading" @search="load" @reset="resetQueryFilters">
+<QueryField label="关键词" keyword><el-input aria-label="关键词" v-model="q" :prefix-icon="Search" clearable placeholder="搜索事件编号、车辆或企业"/></QueryField>
+<QueryField label="状态"><el-select aria-label="状态" v-model="status" clearable placeholder="全部状态"><el-option v-for="item in ['OFFLINE','INVESTIGATING','RECOVERED']" :key="item" :label="statusText(item)" :value="item"/></el-select></QueryField>
+<QueryField label="企业" v-if="!isEnterprise"><el-select aria-label="企业"  v-model="enterpriseId" clearable filterable placeholder="全部企业"><el-option v-for="item in options.enterprises" :key="item.id" :label="item.name" :value="item.id"/></el-select></QueryField>
+</QueryPanel>
+<ListPanel title="离线监管列表" :total="error ? undefined : (total)">
+<template #actions><el-button v-if="canHandle && !isEnterprise" type="primary" :icon="RadioTower" :loading="scanning" @click="scan">立即扫描</el-button></template>
+<div v-if="error" class="error-state"><strong>离线监管暂时无法加载</strong><span>{{ error }}</span><el-button @click="load">重试</el-button></div>
   <template v-else>
     <el-table v-loading="loading" :data="rows" row-key="id" empty-text="暂无符合条件的离线事件">
       <el-table-column label="离线车辆" min-width="220"><template #default="{ row }"><div class="table-link static"><strong>{{ row.vehicle.name }}</strong><span>{{ row.vehicle.businessNo }} · {{ row.businessNo }}</span></div></template></el-table-column>
@@ -81,4 +92,6 @@ async function act(row: any, action: 'INVESTIGATE' | 'UPDATE_REASON' | 'RECOVER'
     </el-table>
     <div class="pagination-row"><span>当前显示 {{ rows.length }} / {{ total }}</span><el-pagination v-model:current-page="page" :page-size="20" :total="total" layout="prev, pager, next"/></div>
   </template>
+
+</ListPanel>
 </template>

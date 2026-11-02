@@ -1,9 +1,13 @@
 <script setup lang="ts">
+import QueryPanel from '../components/QueryPanel.vue';
+import QueryField from '../components/QueryField.vue';
+import ListPanel from '../components/ListPanel.vue';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { AlarmClock, ClipboardCheck, RefreshCw, Search, Siren } from 'lucide-vue-next';
+import { AlarmClock, ClipboardCheck, Search, Siren } from 'lucide-vue-next';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '../api';
+import { safetyTypeText } from '../safety-labels';
 import PageHeader from '../components/PageHeader.vue';
 import { useSessionStore } from '../stores/session';
 import type { PageData } from '../types';
@@ -52,16 +56,31 @@ async function act(row: any, forced?: 'RETURN') {
   await api(`/safety/emergency-tasks/${row.id}/actions`, { method: 'POST', body: JSON.stringify({ action: action[0], comment, score }) });
   ElMessage.success(`${action[1]}成功`); if (detail.value?.id === row.id) detail.value = await api<any>(`/safety/emergency-tasks/${row.id}`); await load();
 }
+
+function resetQueryFilters() {
+  q.value = '';
+  status.value = '';
+  level.value = '';
+  enterpriseId.value = '';
+  page.value = 1;
+  load();
+}
 </script>
 
 <template>
-  <PageHeader :title="isEnterprise ? '应急响应' : '应急处置'" :description="isEnterprise ? '响应监管派发任务，反馈现场或远程处置结果。' : '对重大风险分级派发、跟踪响应、复核评价并保留全过程审计。'" :count="total"><el-button :icon="RefreshCw" :loading="loading" @click="load">刷新</el-button></PageHeader>
-  <div class="table-toolbar safety-toolbar"><el-input v-model="q" :prefix-icon="Search" clearable placeholder="搜索任务编号、标题或告警编号"/><el-select v-model="status" clearable placeholder="全部状态"><el-option v-for="item in ['PENDING_DISPATCH','WAITING_RESPONSE','IN_PROGRESS','PENDING_REVIEW','CLOSED']" :key="item" :label="statusText(item)" :value="item"/></el-select><el-select v-model="level" clearable placeholder="全部等级"><el-option v-for="item in ['CRITICAL','HIGH','MEDIUM','LOW']" :key="item" :label="levelText(item)" :value="item"/></el-select><el-select v-if="!isEnterprise" v-model="enterpriseId" clearable filterable placeholder="全部企业"><el-option v-for="item in options.enterprises" :key="item.id" :label="item.name" :value="item.id"/></el-select></div>
-  <div v-if="error" class="error-state"><strong>应急任务暂时无法加载</strong><span>{{ error }}</span><el-button @click="load">重试</el-button></div>
+  <PageHeader :title="isEnterprise ? '应急响应' : '应急处置'" :description="isEnterprise ? '响应监管派发任务，反馈现场或远程处置结果。' : '对重大风险分级派发、跟踪响应、复核评价并保留全过程审计。'" :count="total" />
+  <QueryPanel :loading="loading" @search="load" @reset="resetQueryFilters">
+<QueryField label="关键词" keyword><el-input aria-label="关键词" v-model="q" :prefix-icon="Search" clearable placeholder="搜索任务编号、标题或告警编号"/></QueryField>
+<QueryField label="状态"><el-select aria-label="状态" v-model="status" clearable placeholder="全部状态"><el-option v-for="item in ['PENDING_DISPATCH','WAITING_RESPONSE','IN_PROGRESS','PENDING_REVIEW','CLOSED']" :key="item" :label="statusText(item)" :value="item"/></el-select></QueryField>
+<QueryField label="等级"><el-select aria-label="等级" v-model="level" clearable placeholder="全部等级"><el-option v-for="item in ['CRITICAL','HIGH','MEDIUM','LOW']" :key="item" :label="levelText(item)" :value="item"/></el-select></QueryField>
+<QueryField label="企业" v-if="!isEnterprise"><el-select aria-label="企业"  v-model="enterpriseId" clearable filterable placeholder="全部企业"><el-option v-for="item in options.enterprises" :key="item.id" :label="item.name" :value="item.id"/></el-select></QueryField>
+</QueryPanel>
+<ListPanel :title="(isEnterprise ? '应急响应' : '应急处置') + '列表'" :total="error ? undefined : (total)">
+<div v-if="error" class="error-state"><strong>应急任务暂时无法加载</strong><span>{{ error }}</span><el-button @click="load">重试</el-button></div>
   <template v-else><el-table v-loading="loading" :data="rows" row-key="id" empty-text="暂无符合条件的应急任务" :row-class-name="({row}: any) => overdue(row) ? 'overdue-row' : ''">
     <el-table-column label="处置任务" min-width="270"><template #default="{ row }"><button class="table-link" @click="open(row)"><strong>{{ row.title }}</strong><span>{{ row.businessNo }} · 来源 {{ row.alert.businessNo }}</span></button></template></el-table-column>
     <el-table-column label="等级" width="84"><template #default="{ row }"><span class="risk-level" :class="row.level.toLowerCase()"><i></i>{{ levelText(row.level) }}</span></template></el-table-column>
-    <el-table-column label="涉及车辆" min-width="160"><template #default="{ row }"><div class="identity-cell"><strong>{{ row.alert.vehicle?.name || '平台事件' }}</strong><span>{{ row.alert.vehicle?.businessNo || row.alert.alertType }}</span></div></template></el-table-column>
+    <el-table-column label="涉及车辆" min-width="160"><template #default="{ row }"><div class="identity-cell"><strong>{{ row.alert.vehicle?.name || '平台事件' }}</strong><span>{{ row.alert.vehicle?.businessNo || safetyTypeText(row.alert.alertType) }}</span></div></template></el-table-column>
     <el-table-column v-if="!isEnterprise" label="责任企业" min-width="190"><template #default="{ row }">{{ row.enterprise.name }}</template></el-table-column>
     <el-table-column label="责任人 / 方式" min-width="145"><template #default="{ row }"><div class="identity-cell"><strong>{{ row.assigneeUser?.displayName || '待指定' }}</strong><span>{{ row.responseMode === 'FIELD' ? '现场处置' : '远程处置' }}</span></div></template></el-table-column>
     <el-table-column label="处置时限" width="145"><template #default="{ row }"><div class="deadline" :class="{ overdue: overdue(row) }"><AlarmClock :size="14"/>{{ fmt(row.dueAt) }}</div></template></el-table-column>
@@ -69,5 +88,7 @@ async function act(row: any, forced?: 'RETURN') {
     <el-table-column label="操作" width="120" fixed="right"><template #default="{ row }"><el-button v-if="nextAction(row)" link type="primary" @click="act(row)">{{ nextAction(row)?.[1] }}</el-button><el-button v-else link @click="open(row)">查看详情</el-button></template></el-table-column>
   </el-table><div class="pagination-row"><span>当前显示 {{ rows.length }} / {{ total }}</span><el-pagination v-model:current-page="page" :page-size="20" :total="total" layout="prev, pager, next"/></div></template>
 
-  <el-drawer v-model="drawer" size="780px" destroy-on-close><template #header><div class="archive-drawer-title"><div><span>{{ detail?.businessNo }}</span><h2>应急处置任务</h2></div><el-tag v-if="detail">{{ statusText(detail.status) }}</el-tag></div></template><div v-loading="detailLoading"><template v-if="detail"><div class="case-hero" :class="detail.level.toLowerCase()"><Siren :size="23"/><div><span>{{ levelText(detail.level) }}级响应 · {{ detail.responseMode === 'FIELD' ? '现场处置' : '远程处置' }}</span><strong>{{ detail.title }}</strong><small>处置时限 {{ fmt(detail.dueAt) }}</small></div></div><dl class="detail-grid"><div><dt>来源告警</dt><dd>{{ detail.alert.businessNo }} · {{ detail.alert.title }}</dd></div><div><dt>责任企业</dt><dd>{{ detail.enterprise.name }}</dd></div><div><dt>处置责任人</dt><dd>{{ detail.assigneeUser?.displayName || '待指定' }}</dd></div><div><dt>响应时间</dt><dd>{{ fmt(detail.respondedAt) }}</dd></div><div class="detail-span-2"><dt>处置要求</dt><dd>{{ detail.requirement }}</dd></div><div class="detail-span-2"><dt>企业反馈</dt><dd>{{ detail.feedback || '尚未提交' }}</dd></div><div class="detail-span-2"><dt>监管评价</dt><dd>{{ detail.evaluation ? `${detail.evaluationScore || '—'} 分 · ${detail.evaluation}` : detail.reviewComment || '尚未评价' }}</dd></div></dl><section class="case-timeline"><header><ClipboardCheck :size="16"/><strong>全过程处置日志</strong></header><ol><li v-for="log in detail.logs" :key="log.id"><i></i><div><strong>{{ actionText(log.action) }} · {{ log.actorName }}</strong><span>{{ fmt(log.createdAt) }} · {{ statusText(log.fromStatus || '') }} → {{ statusText(log.toStatus || '') }}</span><p>{{ log.content }}</p></div></li></ol></section><div class="drawer-actions"><el-button v-if="!isEnterprise && canReview && detail.status === 'PENDING_REVIEW'" @click="act(detail, 'RETURN')">退回继续处置</el-button><el-button v-if="nextAction(detail)" type="primary" @click="act(detail)">{{ nextAction(detail)?.[1] }}</el-button></div></template></div></el-drawer>
+
+</ListPanel>
+<el-drawer v-model="drawer" size="780px" destroy-on-close><template #header><div class="archive-drawer-title"><div><span>{{ detail?.businessNo }}</span><h2>应急处置任务</h2></div><el-tag v-if="detail">{{ statusText(detail.status) }}</el-tag></div></template><div v-loading="detailLoading"><template v-if="detail"><div class="case-hero" :class="detail.level.toLowerCase()"><Siren :size="23"/><div><span>{{ levelText(detail.level) }}级响应 · {{ detail.responseMode === 'FIELD' ? '现场处置' : '远程处置' }}</span><strong>{{ detail.title }}</strong><small>处置时限 {{ fmt(detail.dueAt) }}</small></div></div><dl class="detail-grid"><div><dt>来源告警</dt><dd>{{ detail.alert.businessNo }} · {{ detail.alert.title }}</dd></div><div><dt>责任企业</dt><dd>{{ detail.enterprise.name }}</dd></div><div><dt>处置责任人</dt><dd>{{ detail.assigneeUser?.displayName || '待指定' }}</dd></div><div><dt>响应时间</dt><dd>{{ fmt(detail.respondedAt) }}</dd></div><div class="detail-span-2"><dt>处置要求</dt><dd>{{ detail.requirement }}</dd></div><div class="detail-span-2"><dt>企业反馈</dt><dd>{{ detail.feedback || '尚未提交' }}</dd></div><div class="detail-span-2"><dt>监管评价</dt><dd>{{ detail.evaluation ? `${detail.evaluationScore || '—'} 分 · ${detail.evaluation}` : detail.reviewComment || '尚未评价' }}</dd></div></dl><section class="case-timeline"><header><ClipboardCheck :size="16"/><strong>全过程处置日志</strong></header><ol><li v-for="log in detail.logs" :key="log.id"><i></i><div><strong>{{ actionText(log.action) }} · {{ log.actorName }}</strong><span>{{ fmt(log.createdAt) }} · {{ statusText(log.fromStatus || '') }} → {{ statusText(log.toStatus || '') }}</span><p>{{ log.content }}</p></div></li></ol></section><div class="drawer-actions"><el-button v-if="!isEnterprise && canReview && detail.status === 'PENDING_REVIEW'" @click="act(detail, 'RETURN')">退回继续处置</el-button><el-button v-if="nextAction(detail)" type="primary" @click="act(detail)">{{ nextAction(detail)?.[1] }}</el-button></div></template></div></el-drawer>
 </template>

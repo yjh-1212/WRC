@@ -1,0 +1,97 @@
+Use case: ui-mockup / full-screen redesign.
+EDIT TARGET: Image1 is the previous Shandong workbench draft. Completely redesign its entire body into the modular visual analytics workbench shown in the user's reference screenshots Image2 and Image3. Keep the established product name and horizontal top navigation from Image1. The old inbox-led body is rejected.
+STYLE AND LAYOUT REFERENCES: Image2 and Image3 are the human user's chosen reference screenshots, and are the primary visual guidance. Follow their broad multi-panel dashboard grid, white rectangular panels, pale lavender-gray background, slim blue vertical section-title markers, pastel colorful metric tiles with circular icons, ring charts, horizontal bar charts, small area sparklines, notification tiles and a real month calendar. This is a visual and layout reference; adapt the business text to provincial autonomous delivery vehicle supervision. Do not copy shipping payment or driver-business fields.
+
+OUTPUT: One exceptionally legible high-resolution Simplified Chinese desktop screenshot, landscape about1920x1280 or2048x1360. Flat front view with no device mockup, no external annotations or explanatory callouts. Everything fits on one full canvas. Text accuracy is critical. Professional light Chinese business dashboard, in the exact visual family of the supplied references.
+
+STYLE: pale gray-lavender #f5f6fb page backdrop, white flat module backgrounds with barely1px borders, square or subtly4px corners; metric tiles can have12px corners like the reference. Dark navy #243858 headings, subdued gray secondary text, royal-blue #4964ff accent. Pastel blue, mint, blush, lavender and pale amber tiles. Colored circular line-icon backgrounds. Subtle blue-purple and green gradients allowed INSIDE chart bars/sparklines as in the reference, never as big page decoration. Compact16px section titles,13px body,11px metadata; charts and meaningful data, rather than long paragraphs, dominate. Thin horizontal rule under each section header. Every module title has a slim royal-blue vertical marker on the left, matching the reference screenshots. 16px gutters, about20px outer margin.
+
+SHELL: white64px header, small blue delivery-truck symbol, product "山东无人车监管", subtitle "省级监管平台". Nav "全省工作台" active blue underline, "驾驶舱", "地市管理", "全省监测", "协同督办", "统计分析", "AI智能体", "平台管理"; right avatar "省级管理员". Beneath a very compact breadcrumb "山东省级平台 / 全省工作台". Small date at right "2026年10月29日". No second-level page navigation tabs, no greeting banner. Begin the dense dashboard immediately underneath.
+
+LAYOUT follows the reference composition and contains TEN sections:
+TOP ROW abouty115-395: two modules at55% /45% width.
+MIDDLE ROW abouty411-835: three zones at24% /39% /37%, with the middle zone split into two stacked modules.
+BOTTOM ROW abouty851-1190: four modules at24% /24% /26% /26%.
+All modules align perfectly. This should clearly look like the reference workbench, not a main task list with a sidebar.
+
+MODULE1 TOP LEFT "协同事项" with right link "查看全部 ›":
+Like reference's "今日订单", make a tall lavender total tile at far left spanning two rows, value "16", label "本月事项", small blue circle with document/pie icon. To its right a2-by3 array of colorful compact status tiles, each containing prominent24px number, small status label and right-aligned circular icon:
+"2 待派发" pale blue,
+"3 待响应" pale blush,
+"2 办理中" pale mint,
+"3 待复核" pale lavender,
+"6 已办结" pale green,
+"2 已逾期" pale amber.
+Keep the subtotal math sensible:2+3+2+3+6=16; overdue2 is a reminder subset of unclosed matters, not a sixth mutually exclusive status. Tiny muted footer "逾期事项包含于在办事项" inside the module. No row-based task inbox here.
+
+MODULE2 TOP RIGHT "车辆状态":
+Three slim horizontal progress bars at left with labels and counts, like reference's waybill status panel:
+"运行中 214"
+"停靠中 72"
+"离线 62"
+Use quiet blue/cyan/slate or reference-like subtle gradients, with light gray remaining tracks.
+Right a large clean blue-purple RING CHART with value "82.2%" centered and label "上报在线率" beneath. Small line "在线286 / 在册348辆". The three bars are a complete state partition214+72+62=348; online214+72=286. This is reported status, not proof of real-time coverage.
+
+MODULE3 MIDDLE LEFT "地市概况":
+Top two small pale statistic rectangles with circular icons: "3 已开通城市" and "12 运营企业". Beneath a compact subtitle "地市车辆情况".
+A light three-row listing, no medal, rank or performance score:
+"济南市" with "在册148辆" and "上报在线124辆";
+"青岛市" with "在册120辆" and "上报在线100辆";
+"临沂市" with "在册80辆" and "上报在线62辆".
+Use simple city/building line icons and subtle dividers. White and restrained like reference carrier panel. Do not title it a city-duty evaluation or rank cities.
+
+MODULE4 MIDDLE CENTER UPPER "本月运行":
+Top compact total "累计里程 128,640 km".
+Below two metric-and-mini-area-chart groups separated by a fine vertical line:
+Left "运行次数" value "8,624 次", small mint or blue sparkline;
+Right "自主里程占比" value "96.8%", small purple sparkline.
+Small bottom metadata "统计范围：本月已入库运行记录". Distinct units; do not draw a shared mixed-unit axis. Match reference's "物流情况" silhouette and compact graphical style.
+
+MODULE5 MIDDLE CENTER LOWER "风险处置":
+Left blue ring with center "90.5%" and small label "告警闭环率".
+Right three circular icon+count groups as in reference's customer-feedback panel:
+blue clipboard icon "待核查 1",
+amber warning icon "处置中 3",
+green check icon "已闭环 38".
+Small context "本月告警42条". Counts1+3+38=42 and38/42=90.5%. No satisfaction ratings or invented city scores.
+
+MODULE6 MIDDLE RIGHT "本月监管日历":
+Header right small month selector "2026年10月 ‹ ›".
+Legend four small colored squares, "派发" blue, "反馈" green, "复核" purple, "到期" amber.
+A genuinely readable calendar grid, weekday header "一 二 三 四 五 六 日". Correct October2026 layout:
+row1 gray September28,29,30, then October1 Thursday,2Friday,3Saturday,4Sunday.
+row2 dates5,6,7,8,9,10,11.
+row3 dates12,13,14,15,16,17,18.
+row4 dates19,20,21,22,23,24,25.
+row5 dates26,27,28,29,30,31, gray November1.
+Highlight today29 with a very pale blue fill and blue number. Show sparse small colored numerical event markers on about10 cells, mostly weekdays12-29. Examples:Oct19blue2 green1;Oct20purple1;Oct22amber2;Oct26green3;Oct28amber1;Oct29purple3. Future Oct30/31 may show only an amber due marker; never fabricate future completed feedback. Keep calendar cells clean, thin grid and muted overflow-month days, exactly like the reference. This is not a giant agenda list.
+
+MODULE7 BOTTOM LEFT "待办提醒" right link "查看全部 ›":
+Two compact light-gray notification tiles with small colorful circular icons, readable title, one short contextual line and time:
+blue icon title "地市反馈待复核", line "收到临沂市风险处置反馈", meta "09:18 · 查看详情".
+amber icon title "事项逾期提醒", line "济南、临沂各有1项事项逾期", meta "09:30 · 查看事项".
+No long prose, no fake system announcements, no email delivery or report distribution.
+
+MODULE8 BOTTOM SECOND "协同事项分布" right link "查看详情 ›":
+A large clean multi-segment doughnut, center label "本月事项" and number "16".
+Compact two-column legend under it, with counts:
+"待派发 2", "待响应 3", "办理中 2", "待复核 3", "已办结 6".
+Use consistent blue/cyan/amber/purple/mint colors matching status tiles. Do not include overdue as an extra doughnut segment.
+
+MODULE9 BOTTOM THIRD "地市运行里程（km）":
+Three colorful but restrained horizontal bars with city labels on left, numbers on right:
+"济南市 56,520"
+"青岛市 43,760"
+"临沂市 28,360".
+Values total128,640km and match the month's total above. They are operational comparison, no numbered ranks or city duty grades. Use reference-style soft gradient fill on gray tracks.
+
+MODULE10 BOTTOM FOURTH "告警类型分布（条）":
+Four horizontal colored bars, labels and right-aligned counts:
+"越界告警 16"
+"离线告警 12"
+"低电量 8"
+"其他 6".
+These sum42. Use blues, purple, amber and mint like the reference chart. No driver rankings, no payment amounts, no logistics order-receipt workflow.
+
+Count note: the middle split makes ten visible analytical sections in total; place all the described modules, with bottom row FOUR modules.
+GLOBAL LIMITS: No secondary page tabs; no 登记分发; no city-duty evaluation; no fake financial KPIs, carrier payment totals or driver pickup rankings. No floating robot covering data. Use the reference screenshot's clearly recognizable modular workbench arrangement and lively pastel data visualization style. All data is demonstration data, indicated discreetly lower-right "页面设计稿 · 示例数据". No claim this is implemented production data.

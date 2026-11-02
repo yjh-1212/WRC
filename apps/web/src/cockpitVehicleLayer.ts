@@ -1,4 +1,4 @@
-type VehicleLayerHandle = { remove: () => void };
+type VehicleLayerHandle = { remove: () => void; setPose: (longitude: number, latitude: number, heading?: number) => void };
 type MeshData = { positions: Float32Array; normals: Float32Array; colors: Float32Array };
 export type VehicleTrackSample = { longitude: number; latitude: number; heading?: number };
 
@@ -176,9 +176,10 @@ export async function attachVehicleModel(
       originDistance = path.dist[best];
     }
     let display = { longitude, latitude, heading: options.heading ?? 0 };
+    let fixedPose = { longitude, latitude, heading: options.heading ?? 0 };
 
     const poseAt = () => {
-      if (!path) return { longitude, latitude, heading: options.heading ?? 0 };
+      if (!path) return fixedPose;
       const speed = 8.2;
       return poseOnPath(path, originDistance + ((performance.now() - startedAt) / 1000) * speed);
     };
@@ -282,6 +283,14 @@ export async function attachVehicleModel(
       raf = requestAnimationFrame(tick);
     }
     return {
+      setPose: (nextLongitude, nextLatitude, nextHeading) => {
+        if (disposed || !Number.isFinite(nextLongitude) || !Number.isFinite(nextLatitude)) return;
+        const heading = Number.isFinite(nextHeading) ? nextHeading! : fixedPose.heading;
+        if (fixedPose.longitude === nextLongitude && fixedPose.latitude === nextLatitude && fixedPose.heading === heading) return;
+        fixedPose = { longitude: nextLongitude, latitude: nextLatitude, heading };
+        display = { ...fixedPose };
+        map.render();
+      },
       remove: () => {
         disposed = true;
         cancelAnimationFrame(raf);

@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import QueryPanel from '../components/QueryPanel.vue';
+import QueryField from '../components/QueryField.vue';
+import ListPanel from '../components/ListPanel.vue';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import { Plus, RefreshCw, Search, SlidersHorizontal } from 'lucide-vue-next';
+import { Plus, Search, SlidersHorizontal } from 'lucide-vue-next';
 import { api } from '../api';
 import PageHeader from '../components/PageHeader.vue';
 import { useSessionStore } from '../stores/session';
@@ -19,16 +22,16 @@ const active = ref<any>(null);
 const checked = ref<string[]>([]);
 const saving = ref(false);
 const form = reactive({ code: '', name: '', portal: 'REGULATORY', description: '' });
-const isSuperAdmin = computed(() => Boolean(session.user?.roles.some((role) => role.code === 'SUPER_ADMIN')));
+const isProvince = computed(()=>session.user?.accountLevel==='PROVINCE');
+const canManageRoles = computed(()=>session.user?.permissions.includes('system:role:update')??false);
 const filtered = computed(() => roles.value.filter((row) => {
   const keyword = q.value.trim().toLowerCase();
   const matched = !keyword || [row.name, row.code, row.description].some((value) => String(value ?? '').toLowerCase().includes(keyword));
   return matched && (!portal.value || row.portal === portal.value);
 }));
 function canGrant(row: any) {
-  if (row.code === 'SUPER_ADMIN') return false;
-  if (row.portal === 'ENTERPRISE') return isSuperAdmin.value;
-  return true;
+  if (!canManageRoles.value || row.code === 'SUPER_ADMIN') return false;
+  return isProvince.value ? !row.workspaceId && row.portal !== 'ENTERPRISE' : row.workspaceId === session.user?.workspaceId;
 }
 
 async function load() {
@@ -48,7 +51,7 @@ async function saveGrant() {
   saving.value = true;
   try {
     await api(`/system/roles/${active.value.id}/permissions`, { method: 'PATCH', body: JSON.stringify({ permissionIds: checked.value }) });
-    ElMessage.success('角色权限已更新，相关用户重新登录后生效');
+    ElMessage.success('角色权限已更新，相关账号权限将按最新授权生效');
     grantDialog.value = false;
     await load();
   } catch (reason) {
@@ -72,22 +75,26 @@ async function create() {
   } finally { saving.value = false; }
 }
 onMounted(load);
+
+function resetQueryFilters() {
+  q.value = '';
+  portal.value = '';
+  load();
+}
 </script>
 
 <template>
-  <PageHeader title="角色管理" description="监管端查看全平台岗位。企业角色只读；新增和给企业角色授权仅超级管理员可操作。" :count="filtered.length">
-    <el-button :icon="RefreshCw" :loading="loading" @click="load">刷新</el-button>
-    <el-button v-if="isSuperAdmin" type="primary" :icon="Plus" @click="openCreate">新增角色</el-button>
-  </PageHeader>
-  <div class="table-toolbar">
-    <el-input v-model="q" :prefix-icon="Search" clearable placeholder="搜索角色名称或编码" aria-label="搜索角色" />
-    <el-select v-model="portal" clearable placeholder="全部门户" aria-label="所属门户">
+  <PageHeader title="角色管理" description="在当前管理范围内维护角色和业务权限。" :count="filtered.length" />
+  <QueryPanel :loading="loading" @search="load" @reset="resetQueryFilters">
+<QueryField label="关键词" keyword><el-input v-model="q" :prefix-icon="Search" clearable placeholder="搜索角色名称或编码" aria-label="搜索角色" /></QueryField>
+<QueryField label="所属门户"><el-select v-model="portal" clearable placeholder="全部门户" aria-label="所属门户">
       <el-option label="监管端" value="REGULATORY" />
-      <el-option label="企业端" value="ENTERPRISE" />
-    </el-select>
-    <el-button v-if="q || portal" text @click="q = ''; portal = ''">清除筛选</el-button>
-  </div>
-  <div v-if="error" class="error-state"><strong>角色列表暂时无法加载</strong><span>{{ error }}</span><el-button @click="load">重试</el-button></div>
+      <el-option v-if="!isProvince" label="企业端" value="ENTERPRISE" />
+    </el-select></QueryField>
+</QueryPanel>
+<ListPanel title="角色管理列表" :total="error ? undefined : (filtered.length)">
+<template #actions><el-button v-if="canManageRoles" type="primary" :icon="Plus" @click="openCreate">新增角色</el-button></template>
+<div v-if="error" class="error-state"><strong>角色列表暂时无法加载</strong><span>{{ error }}</span><el-button @click="load">重试</el-button></div>
   <el-table v-else v-loading="loading" :data="filtered" empty-text="没有符合条件的角色">
     <el-table-column label="角色" min-width="220">
       <template #default="{ row }">
@@ -106,8 +113,10 @@ onMounted(load);
       </template>
     </el-table-column>
   </el-table>
-  <el-dialog v-model="createDialog" title="新增角色" width="520" destroy-on-close>
-    <p class="dialog-note">新增后不会自动带权限。企业角色仍只能由超级管理员授权，企业端不能自己改权限。</p>
+
+</ListPanel>
+<el-dialog v-model="createDialog" title="新增角色" width="520" destroy-on-close>
+    <p class="dialog-note">角色创建后再分配权限，授权范围受城市功能及可委派权限限制。</p>
     <el-form label-position="top">
       <div class="form-grid">
         <el-form-item label="角色编码" required><el-input v-model="form.code" input-id="role-code" placeholder="如 DISTRICT_INSPECTOR" /></el-form-item>
@@ -116,7 +125,7 @@ onMounted(load);
       <el-form-item label="所属门户" required>
         <el-select v-model="form.portal" aria-label="所属门户">
           <el-option label="监管端" value="REGULATORY" />
-          <el-option label="企业端" value="ENTERPRISE" />
+          <el-option v-if="!isProvince" label="企业端" value="ENTERPRISE" />
         </el-select>
       </el-form-item>
       <el-form-item label="说明"><el-input v-model="form.description" type="textarea" :rows="3" /></el-form-item>

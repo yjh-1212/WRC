@@ -1,23 +1,62 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { AlertTriangle, MapPinned, RefreshCw } from 'lucide-vue-next';
 import { isAmapConfigured, loadAMap } from '../amap';
 import type { ElectronicFenceItem, OperationPoint, OperationRegionItem, RiskPoint, TrackPoint } from '../types';
 
 const props = withDefaults(defineProps<{
   points?: OperationPoint[]; track?: TrackPoint[]; regions?: OperationRegionItem[]; fences?: ElectronicFenceItem[]; riskPoints?: RiskPoint[];
-  selectedId?: string; mode?: 'dashboard' | 'realtime' | 'distribution' | 'trajectory' | 'regions' | 'fences' | 'risk';
+  monitoring?: boolean; selectedId?: string; mode?: 'dashboard' | 'realtime' | 'distribution' | 'trajectory' | 'regions' | 'fences' | 'risk';
   displayLayer?: 'scatter' | 'cluster' | 'heat'; groupBy?: 'enterprise' | 'organization' | 'none'; height?: string;
 }>(), { points: () => [], track: () => [], regions: () => [], fences: () => [], riskPoints: () => [], selectedId: '', mode: 'realtime', displayLayer: 'scatter', groupBy: 'none', height: '560px' });
 const emit = defineEmits<{ select: [id: string]; action: [type: 'monitor' | 'trajectory' | 'archive' | 'alerts', id: string]; regionSelect: [id: string]; fenceSelect: [id: string]; polygonDrawn: [points: Array<{ longitude: number; latitude: number }>]; ready: [] }>();
 const container = ref<HTMLElement | null>(null); const state = ref<'loading' | 'ready' | 'error'>('loading'); const message = ref('');
+const mapComplete = ref(false);
 const authWarning = ref(false);
 const originalConsoleError = console.error;
 const map = shallowRef<any>(null); const AMapRef = shallowRef<any>(null); const overlays: any[] = []; const cluster = shallowRef<any>(null); const heatmap = shallowRef<any>(null); const movingMarker = shallowRef<any>(null); const mouseTool = shallowRef<any>(null);
+let replayFrame=0,replayElapsed=0,replayClock=0,replayPaused=false;
+function cancelReplay(){if(replayFrame)cancelAnimationFrame(replayFrame);replayFrame=0}
 let renderFrame = 0; let fittedMode = ''; let lastDashboardMode = '';
+let controlsInstalled = false;
 let resizeObserver: ResizeObserver | null = null;
+let disposed = false; let generation = 0; let resizeFrame = 0;
+let regionDrawing=false,regionDraft:Array<{longitude:number;latitude:number}>=[],regionPreview:any=null,previousDoubleClickZoom=true;
+function regionCoordinate(event:MouseEvent){const rect=container.value?.getBoundingClientRect();if(!rect||!map.value||!AMapRef.value)return null;const point=map.value.containerToLngLat(new AMapRef.value.Pixel(event.clientX-rect.left,event.clientY-rect.top));return {longitude:point.getLng(),latitude:point.getLat()}}
+function addRegionVertex(event:MouseEvent){
+  if(!regionDrawing||(event.target as HTMLElement)?.closest?.('.amap-controls,.amap-logo,.amap-copyright'))return;
+  const point=regionCoordinate(event);if(!point)return;const last=regionDraft.at(-1);if(last&&Math.abs(last.longitude-point.longitude)<1e-8&&Math.abs(last.latitude-point.latitude)<1e-8)return;
+  regionDraft.push(point);if(regionPreview)map.value.remove(regionPreview);
+  const path=regionDraft.map(p=>[p.longitude,p.latitude]),style={path,strokeColor:'#3268f6',strokeWeight:3,fillColor:'#6a9fff',fillOpacity:.12,zIndex:95,bubble:true};
+  regionPreview=regionDraft.length>=3?new AMapRef.value.Polygon(style):new AMapRef.value.Polyline(style);map.value.add(regionPreview);
+}
+function finishRegionDrawing(event:MouseEvent){if(!regionDrawing)return;event.preventDefault();event.stopPropagation();addRegionVertex(event);if(regionDraft.length<3)return;const points=regionDraft.map(p=>({...p}));cancelPolygonDraw();emit('polygonDrawn',points)}
+function startRegionDrawing(){
+  if(!map.value||!AMapRef.value||state.value!=='ready'||!container.value)return false;
+  cancelPolygonDraw();regionDrawing=true;regionDraft=[];previousDoubleClickZoom=map.value.getStatus?.().doubleClickZoom??true;map.value.setStatus({doubleClickZoom:false});container.value.style.cursor='crosshair';
+  container.value.addEventListener('click',addRegionVertex,true);container.value.addEventListener('dblclick',finishRegionDrawing,true);return true;
+}
+function hasMapSize() { return Boolean(container.value && container.value.clientWidth > 0 && container.value.clientHeight > 0); }
+function initialRegionView(){
+  if(!['regions','fences'].includes(props.mode)&&!props.monitoring||!container.value)return null;
+  const points=props.mode==='fences'?props.fences.flatMap(f=>f.polygon):props.monitoring?props.points.filter(p=>p.realtimeStatus&&p.health?.locationValid!==false).map(p=>p.realtimeStatus!):props.regions.flatMap(region=>region.polygon);if(!points.length)return null;
+  const west=Math.min(...points.map(p=>p.longitude)),east=Math.max(...points.map(p=>p.longitude)),south=Math.min(...points.map(p=>p.latitude)),north=Math.max(...points.map(p=>p.latitude));
+  const mercator=(latitude:number)=>Math.log(Math.tan(Math.PI/4+Math.max(-85,Math.min(85,latitude))*Math.PI/360));
+  const dx=Math.max((east-west)/360,1e-9),dy=Math.max((mercator(north)-mercator(south))/(2*Math.PI),1e-9);
+  const zoom=Math.max(8,Math.min(15,Math.log2(Math.max(100,container.value.clientWidth-128)/(256*dx)),Math.log2(Math.max(100,container.value.clientHeight-128)/(256*dy))));
+  return {center:[(west+east)/2,(south+north)/2],zoom:Math.floor(zoom*100)/100};
+}
+function resizeMap() {
+  if (disposed || resizeFrame) return;
+  resizeFrame = requestAnimationFrame(() => {
+    resizeFrame = 0;
+    // Hidden/collapsed containers have no valid map projection bounds.
+    if (!disposed && map.value && hasMapSize()) map.value.resize?.();
+  });
+}
 
 function statusColor(point: OperationPoint) {
+  if(props.monitoring)return point.onlineStatus!=='ONLINE'?'#98a6ba':point.realtimeStatus?.drivingState==='RUNNING'?'#3268f6':'#18b985';
   if (point.attentionLevel === 'CRITICAL') return '#D92D20';
   if (point.attentionLevel === 'HIGH' || point.attentionLevel === 'MEDIUM') return '#F79009';
   if (point.onlineStatus !== 'ONLINE') return '#98A2B3';
@@ -36,8 +75,9 @@ function markerNode(point: OperationPoint) {
   root.className = `operation-marker${props.selectedId === point.id ? ' selected' : ''}${isDashboardDot() ? ' round' : ''}${pulse ? ' pulse' : ''}`;
   root.style.setProperty('--marker-color', statusColor(point));
   root.setAttribute('aria-label', `${point.name}，${point.onlineStatus === 'ONLINE' ? '在线' : '离线'}`);
-  const dot = document.createElement('span'); dot.className = 'operation-marker-dot';
-  const label = document.createElement('span'); label.className = 'operation-marker-label'; label.textContent = point.businessNo.replace('VEH-2026-', '#');
+  if(props.monitoring){root.classList.add('monitor-map-car');if(point.currentAlert||point.onlineStatus==='ONLINE'&&point.attentionLevel&&point.attentionLevel!=='NORMAL')root.classList.add('has-anomaly');root.setAttribute('aria-pressed',String(props.selectedId===point.id));}
+  const dot = document.createElement('span'); dot.className = 'operation-marker-dot';if(props.monitoring){dot.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 17H3V9l3-5h12l3 5v8h-2M5 17h14M5 10h14M6 4l-1 6m13-6 1 6"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>';}
+  const label = document.createElement('span'); label.className = 'operation-marker-label'; label.textContent = props.monitoring?point.name:point.businessNo.replace('VEH-2026-', '#');
   root.append(dot, label); root.addEventListener('click', () => selectPoint(point)); return root;
 }
 function infoNode(point: OperationPoint) {
@@ -56,11 +96,12 @@ function infoNode(point: OperationPoint) {
 function stateText(value?: string) { return ({ RUNNING: '运行中', IDLE: '临停', PARKED: '停驶', OFFLINE: '离线' } as Record<string, string>)[value ?? ''] ?? '未知'; }
 function selectPoint(point: OperationPoint) {
   emit('select', point.id);
-  if (!map.value || !AMapRef.value || !point.realtimeStatus || isDashboardDot()) return;
+  if (!map.value || !AMapRef.value || !point.realtimeStatus || isDashboardDot() || props.monitoring) return;
   const info = new AMapRef.value.InfoWindow({ content: infoNode(point), anchor: 'bottom-center', offset: new AMapRef.value.Pixel(0, -18), autoMove: true, closeWhenClickMap: true });
   info.open(map.value, [point.realtimeStatus.longitude, point.realtimeStatus.latitude]);
 }
 function clearBusinessLayers() {
+  cancelReplay();
   if (cluster.value) { cluster.value.setMap?.(null); cluster.value = null; }
   if (heatmap.value) { heatmap.value.setMap?.(null); heatmap.value = null; }
   if (overlays.length && map.value) map.value.remove(overlays.splice(0));
@@ -70,7 +111,7 @@ function renderRegions() {
   if (!map.value || !AMapRef.value) return;
   props.regions.forEach((region) => {
     if (region.polygon.length < 3) return;
-    const polygon = new AMapRef.value.Polygon({ path: region.polygon.map((p) => [p.longitude, p.latitude]), strokeColor: region.status === 'ACTIVE' ? '#315f91' : '#a1a1aa', strokeWeight: props.mode === 'regions' ? 2.5 : 1.5, strokeOpacity: .9, fillColor: region.status === 'ACTIVE' ? '#7aa7d1' : '#d4d4d8', fillOpacity: props.mode === 'regions' ? .2 : .08, zIndex: 20 });
+    const polygon = new AMapRef.value.Polygon({ path: region.polygon.map((p) => [p.longitude, p.latitude]), strokeColor: props.selectedId === region.id || region.status === 'ACTIVE' ? '#3268f6' : '#9aabc0', strokeWeight: props.mode === 'regions' || props.monitoring ? 3 : 1.5, strokeOpacity: .9, fillColor: region.status === 'ACTIVE' ? '#7aa7d1' : '#d4d4d8', fillOpacity: props.mode === 'regions' ? .12 : .08, zIndex: 20 });
     polygon.on('click', () => emit('regionSelect', region.id)); map.value.add(polygon); overlays.push(polygon);
   });
 }
@@ -80,7 +121,7 @@ function renderFences() {
   props.fences.forEach((fence) => {
     if (fence.polygon.length < 3) return;
     const selected = props.selectedId === fence.id; const color = fenceColor(fence.fenceType);
-    const polygon = new AMapRef.value.Polygon({ path: fence.polygon.map((p) => [p.longitude, p.latitude]), strokeColor: color, strokeWeight: selected ? 4 : 2.5, strokeOpacity: fence.active ? 1 : .55, strokeStyle: fence.active ? 'solid' : 'dashed', fillColor: color, fillOpacity: selected ? .24 : fence.active ? .14 : .07, zIndex: selected ? 75 : 45, extData: { id: fence.id } });
+    const polygon = new AMapRef.value.Polygon({ path: fence.polygon.map((p) => [p.longitude, p.latitude]), strokeColor: color, strokeWeight: selected ? 4 : 2.5, strokeOpacity: fence.active ? 1 : .55, strokeStyle: fence.active ? 'solid' : 'dashed', fillColor: color, fillOpacity: selected ? .07 : fence.active ? .05 : .02, zIndex: selected ? 75 : 45, extData: { id: fence.id } });
     polygon.on('click', () => emit('fenceSelect', fence.id)); map.value.add(polygon); overlays.push(polygon);
   });
 }
@@ -89,12 +130,14 @@ function renderTrack() {
   const track = performanceTrack();
   const path = track.map((point) => [point.longitude, point.latitude]);
   drawTrackPath(path, track);
-  void snapTrackToRoad(track);
+  // Preserve original coordinates; a corrected visual route must never replace evidence.
 }
 function drawTrackPath(path: number[][], track: typeof props.track) {
   if (!map.value || !AMapRef.value) return;
-  const line = new AMapRef.value.Polyline({ path, strokeColor: '#244d7c', strokeWeight: 6, strokeOpacity: .9, lineJoin: 'round', showDir: true, zIndex: 60 });
-  map.value.add(line); overlays.push(line);
+  const segments:number[][][]=[];let segment:number[][]=[];
+  path.forEach((p,i)=>{const gap=i>0?(+new Date(track[i].recordedAt)-+new Date(track[i-1].recordedAt))/1000:0;const jump=i>0?Math.hypot((p[0]-path[i-1][0])*85000,(p[1]-path[i-1][1])*111000):0;if(i>0&&(gap>300||gap>0&&jump/gap>60)){segments.push(segment);segment=[]}segment.push(p)});if(segment.length)segments.push(segment);
+  const lines=segments.map(points=>new AMapRef.value.Polyline({path:points,strokeColor:'#3268f6',strokeWeight:4,strokeOpacity:.9,lineJoin:'round',showDir:true,zIndex:60}));
+  lines.forEach(line=>{map.value.add(line);overlays.push(line)});
   track.filter((point) => point.pointType !== 'NORMAL').forEach((point) => {
     const node = document.createElement('span'); node.className = `track-event ${point.pointType.toLowerCase()}`; node.title = point.pointType === 'STOP' ? '停留点' : '轨迹事件';
     const marker = new AMapRef.value.Marker({ position: [point.longitude, point.latitude], content: node, offset: new AMapRef.value.Pixel(-7, -7), zIndex: 75 });
@@ -102,10 +145,19 @@ function drawTrackPath(path: number[][], track: typeof props.track) {
   });
   const car = document.createElement('span'); car.className = 'moving-vehicle'; car.textContent = '●';
   movingMarker.value = new AMapRef.value.Marker({ position: path[0], content: car, offset: new AMapRef.value.Pixel(-12, -12), angle: track[0].heading, zIndex: 90 });
-  map.value.add(movingMarker.value); overlays.push(movingMarker.value); map.value.setFitView([line], true, [72, 72, 72, 72], 16);
+  map.value.add(movingMarker.value); overlays.push(movingMarker.value); map.value.setFitView(lines, true, [72, 72, 72, 72], 16);
 }
-function snapTrackToRoad(track: typeof props.track) {
-  if (!AMapRef.value?.GraspRoad || track.length < 2) return Promise.resolve();
+async function snapTrackToRoad(track: typeof props.track) {
+  const instance = map.value;
+  if (track.length < 2) return;
+  try {
+    const AMap = await loadAMap(['AMap.GraspRoad']);
+    if (disposed || !instance || map.value !== instance) return;
+    AMapRef.value = AMap;
+  } catch {
+    return;
+  }
+  if (!AMapRef.value?.GraspRoad) return;
   return new Promise<void>((resolve) => {
     const timer = window.setTimeout(resolve, 1600);
     try {
@@ -117,7 +169,7 @@ function snapTrackToRoad(track: typeof props.track) {
       })), (error: unknown, result: { data?: { points?: Array<{ x: number; y: number }> } }) => {
         window.clearTimeout(timer);
         const snapped = result?.data?.points?.map((point) => [point.x, point.y]) ?? [];
-        if (!error && snapped.length >= 2 && map.value) {
+        if (!error && snapped.length >= 2 && !disposed && map.value === instance && props.mode === 'trajectory') {
           clearBusinessLayers();
           drawTrackPath(snapped, track);
         }
@@ -226,7 +278,7 @@ function renderAccidentMarkers() {
 }
 function renderPoints() {
   if (!map.value || !AMapRef.value) return;
-  const points = props.points.filter((item) => item.realtimeStatus);
+  const points = props.points.filter((item) => item.realtimeStatus && (!props.monitoring || item.health?.locationValid!==false));
   if (props.mode === 'dashboard') {
     renderDashboardPoints();
     if (props.riskPoints.length) renderAccidentMarkers();
@@ -257,10 +309,10 @@ function renderRiskPoints() {
   });
 }
 function render() {
-  if (!map.value) return;
+  if (disposed || !map.value || !hasMapSize()) return;
   try {
     clearBusinessLayers();
-    if (props.mode === 'fences') renderFences();
+    if (props.mode === 'fences') { renderRegions(); renderFences(); }
     else if (props.mode !== 'risk') { renderRegions(); if (props.fences.length) renderFences(); }
     if (props.mode === 'trajectory') renderTrack();
     else if (props.mode === 'risk') renderRiskPoints();
@@ -271,7 +323,6 @@ function render() {
       map.value.setFitView(visible, true, [64, 64, 64, 64], 15);
       fittedMode = props.mode;
     }
-    map.value.resize?.();
   } catch (error) {
     state.value = 'error';
     message.value = error instanceof Error ? error.message : '地图图层渲染失败';
@@ -284,6 +335,7 @@ function performanceTrack() {
   return props.track.filter((point, index) => index === 0 || index === props.track.length - 1 || point.pointType !== 'NORMAL' || index % step === 0);
 }
 function scheduleRender() {
+  if (disposed) return;
   if (renderFrame) cancelAnimationFrame(renderFrame);
   renderFrame = requestAnimationFrame(() => { renderFrame = 0; render(); });
 }
@@ -292,7 +344,12 @@ function handleZoomEnd() {
   container.value?.classList.toggle('compact-map-labels', isDashboardDot() || zoom < 12);
   if (props.mode === 'dashboard' && state.value === 'ready') {
     const nextMode = dashboardZoomMode(zoom);
-    if (nextMode !== lastDashboardMode) { lastDashboardMode = nextMode; scheduleRender(); }
+    if (nextMode !== lastDashboardMode) {
+      lastDashboardMode = nextMode;
+      if (nextMode === 'cluster' && !AMapRef.value?.MarkerCluster) {
+        void loadAMap(['AMap.MarkerCluster']).then((AMap) => { if (disposed || !map.value) return; AMapRef.value = AMap; scheduleRender(); }).catch(() => scheduleRender());
+      } else scheduleRender();
+    }
   }
 }
 function revealMap() {
@@ -301,20 +358,64 @@ function revealMap() {
   emit('ready');
   render();
 }
-function handleMapComplete() { revealMap(); }
+function handleMapComplete() { mapComplete.value = true; revealMap(); }
+function deferredPlugins() {
+  const plugins = ['AMap.Scale'];
+  if (props.mode !== 'dashboard') plugins.push('AMap.ToolBar');
+  if (props.mode === 'distribution' && props.displayLayer === 'cluster') plugins.push('AMap.MarkerCluster');
+  if ((props.mode === 'distribution' && props.displayLayer === 'heat') || props.mode === 'risk') plugins.push('AMap.HeatMap');
+
+  return [...new Set(plugins)];
+}
+async function installDeferredFeatures() {
+  const instance = map.value;
+  try {
+    const AMap = await loadAMap(deferredPlugins());
+    if (disposed || !instance || map.value !== instance) return;
+    AMapRef.value = AMap;
+    if (!controlsInstalled) {
+      map.value.addControl(new AMap.Scale());
+      if (props.mode !== 'dashboard') map.value.addControl(new AMap.ToolBar({ position: { right: '12px', top: '72px' } }));
+      controlsInstalled = true;
+    }
+    if (props.mode === 'fences' && AMap.MouseTool && !mouseTool.value) {
+      mouseTool.value = new AMap.MouseTool(map.value);
+      mouseTool.value.on('draw', handleFenceDraw);
+    }
+    scheduleRender();
+  } catch {
+    // 基础地图已经可用；可选插件失败时保留当前点位/矢量降级展示。
+  }
+}
 async function init() {
+  const attempt = ++generation;
   if (!isAmapConfigured()) { state.value = 'error'; message.value = '地图配置缺失，请在本地环境变量中配置高德 Web 端 Key 与安全密钥。'; return; }
   state.value = 'loading'; message.value = '';
+  mapComplete.value = false;
   try {
     const AMap = await loadAMap();
     await nextTick();
-    if (!container.value) return;
+    if (disposed || attempt !== generation || !container.value) return;
+    if (!hasMapSize()) {
+      resizeObserver?.disconnect();
+      resizeObserver = new ResizeObserver(() => { if (!disposed && attempt === generation && hasMapSize()) { resizeObserver?.disconnect(); void init(); } });
+      resizeObserver.observe(container.value);
+      return;
+    }
+    if (map.value) {
+      cancelPolygonDraw();
+      clearBusinessLayers();
+      map.value.off('complete', handleMapComplete); map.value.off('zoomend', handleZoomEnd);
+      map.value.destroy(); controlsInstalled = false;
+    }
     AMapRef.value = AMap;
-    const usePitch = props.mode === 'realtime';
+    const regionView=initialRegionView();
+    fittedMode = regionView ? props.mode : '';
+    const usePitch = props.mode === 'realtime' && !props.monitoring;
     map.value = new AMap.Map(container.value, {
-      viewMode: '3D',
-      center: [120.082, 30.274],
-      zoom: 11,
+      viewMode: usePitch ? '3D' : '2D',
+      center: regionView?.center??[117.000923, 36.675807],
+      zoom: regionView?.zoom??11,
       pitch: usePitch ? 28 : 0,
       rotation: 0,
       mapStyle: 'amap://styles/whitesmoke',
@@ -326,49 +427,52 @@ async function init() {
       showBuildingBlock: false,
       showIndoorMap: false,
       isHotspot: false,
-      features: ['bg', 'point', 'road', 'building'],
+      features: usePitch ? ['bg', 'point', 'road', 'building'] : ['bg', 'point', 'road'],
       showLabel: true,
     });
-    map.value.addControl(new AMap.Scale());
-    if (props.mode !== 'dashboard') {
-      map.value.addControl(new AMap.ToolBar({ position: { right: '12px', top: '72px' } }));
-    }
-    if (props.mode === 'fences' && AMap.MouseTool) {
-      mouseTool.value = new AMap.MouseTool(map.value);
-      mouseTool.value.on('draw', handleFenceDraw);
-    }
     map.value.on('complete', handleMapComplete);
     map.value.on('zoomend', handleZoomEnd);
     resizeObserver?.disconnect();
     if (typeof ResizeObserver !== 'undefined' && container.value) {
-      resizeObserver = new ResizeObserver(() => { map.value?.resize?.(); });
+      resizeObserver = new ResizeObserver(resizeMap);
       resizeObserver.observe(container.value);
     }
     await nextTick();
-    map.value.resize?.();
-    revealMap();
-  } catch (error) { state.value = 'error'; message.value = error instanceof Error ? error.message : '高德地图加载失败'; }
+    if (disposed || attempt !== generation) return;
+    resizeMap();
+    void installDeferredFeatures();
+  } catch (error) { if (!disposed && attempt === generation) { state.value = 'error'; message.value = error instanceof Error ? error.message : '高德地图加载失败'; } }
 }
-function playTrack() {
+async function playTrack() {
+  if(props.monitoring){replayElapsed=0;replayPaused=false;replayClock=performance.now();runReplay();return}
   if (!movingMarker.value || !AMapRef.value || props.track.length < 2) return;
+  try { AMapRef.value = await loadAMap(['AMap.MoveAnimation']); } catch { return; }
+  if (!map.value || !movingMarker.value) return;
   const track = performanceTrack(); movingMarker.value.stopMove?.(); movingMarker.value.setPosition([track[0].longitude, track[0].latitude]);
   movingMarker.value.moveAlong(track.map((point, index) => ({ position: new AMapRef.value.LngLat(point.longitude, point.latitude), duration: index === 0 ? 0 : 220 })), { autoRotation: true });
 }
-function pauseTrack() { movingMarker.value?.pauseMove?.(); }
-function resumeTrack() { movingMarker.value?.resumeMove?.(); }
-function stopTrack() { movingMarker.value?.stopMove?.(); if (props.track[0]) movingMarker.value?.setPosition([props.track[0].longitude, props.track[0].latitude]); }
+function runReplay(){
+  cancelReplay();const points=performanceTrack();if(!points.length||!movingMarker.value)return;const start=+new Date(points[0].recordedAt),end=+new Date(points.at(-1)!.recordedAt);
+  const tick=(now:number)=>{if(disposed||!movingMarker.value||replayPaused)return;replayElapsed+=(now-replayClock)*64;replayClock=now;const at=Math.min(end,start+replayElapsed);let i=0;while(i<points.length-1&&+new Date(points[i+1].recordedAt)<=at)i++;const a=points[i],b=points[i+1];let lng=a.longitude,lat=a.latitude;if(b){const dt=+new Date(b.recordedAt)-+new Date(a.recordedAt),jump=Math.hypot((b.longitude-a.longitude)*85000,(b.latitude-a.latitude)*111000);if(dt>0&&dt<=300000&&jump/(dt/1000)<=60){const t=(at-+new Date(a.recordedAt))/dt;lng+=(b.longitude-a.longitude)*t;lat+=(b.latitude-a.latitude)*t}}movingMarker.value.setPosition([lng,lat]);if(at<end)replayFrame=requestAnimationFrame(tick);else replayFrame=0};replayClock=performance.now();replayFrame=requestAnimationFrame(tick);
+}
+function pauseTrack() {if(props.monitoring){replayPaused=true;cancelReplay()}else movingMarker.value?.pauseMove?.(); }
+function resumeTrack() { if(props.monitoring){replayPaused=false;runReplay()}else movingMarker.value?.resumeMove?.(); }
+function stopTrack() { cancelReplay();replayElapsed=0;replayPaused=false;movingMarker.value?.stopMove?.(); if (props.track[0]) movingMarker.value?.setPosition([props.track[0].longitude, props.track[0].latitude]); }
 function handleFenceDraw(event: any) {
-  mouseTool.value?.close(false); const path = event.obj?.getPath?.() ?? [];
-  const points = path.map((point: any) => ({ longitude: Number(point.getLng?.() ?? point.lng), latitude: Number(point.getLat?.() ?? point.lat) })).filter((point: any) => Number.isFinite(point.longitude) && Number.isFinite(point.latitude));
+  mouseTool.value?.close(false); let path = event.obj?.getPath?.() ?? [];
+  while(Array.isArray(path[0])&&typeof path[0][0]!=='number')path=path[0];
+  const points = path.map((point: any) => ({ longitude: Number(point.getLng?.() ?? point.lng ?? point[0]), latitude: Number(point.getLat?.() ?? point.lat ?? point[1]) })).filter((point: any) => Number.isFinite(point.longitude) && Number.isFinite(point.latitude));
   if (event.obj) overlays.push(event.obj); if (points.length >= 3) emit('polygonDrawn', points);
 }
 function startPolygonDraw() { if (!mouseTool.value) return false; mouseTool.value.close(true); mouseTool.value.polygon({ strokeColor: '#244d7c', strokeWeight: 3, fillColor: '#6d98bf', fillOpacity: .22, zIndex: 90 }); return true; }
-function cancelPolygonDraw() { mouseTool.value?.close(true); }
+function cancelPolygonDraw() { mouseTool.value?.close(true);if(regionDrawing)map.value?.setStatus?.({doubleClickZoom:previousDoubleClickZoom});regionDrawing=false;regionDraft=[];if(regionPreview)map.value?.remove(regionPreview);regionPreview=null;container.value?.removeEventListener('click',addRegionVertex,true);container.value?.removeEventListener('dblclick',finishRegionDrawing,true);if(container.value)container.value.style.cursor=''; }
+async function beginPolygonDraw(){return startRegionDrawing()}
 function handleMapError(event: ErrorEvent) { if (event.message === 'Unimplemented type: 3' && String(event.error?.stack ?? '').includes('webapi.amap.com')) authWarning.value = true; }
 function handleConsoleError(...args: unknown[]) { if (args.some((value) => String(value).includes('INVALID_USER_DOMAIN'))) authWarning.value = true; originalConsoleError.apply(console, args); }
 function fitVisible() {
   if (!map.value || !AMapRef.value) return;
-  const points = props.points.filter((item) => item.realtimeStatus);
+  if(props.mode==='trajectory'){map.value.setFitView(overlays.filter(o=>o.getPath?.()),true,[48,48,48,48],16);return}
+  const points = props.points.filter((item) => item.realtimeStatus&&(!props.monitoring||item.health?.locationValid!==false));
   if (!points.length) return;
   if (points.length === 1) {
     map.value.setZoomAndCenter(15, [points[0].realtimeStatus!.longitude, points[0].realtimeStatus!.latitude], false);
@@ -378,28 +482,35 @@ function fitVisible() {
   const lats = points.map((item) => item.realtimeStatus!.latitude);
   map.value.setBounds(new AMapRef.value.Bounds([Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]), false, [48, 48, 48, 48]);
 }
-defineExpose({ playTrack, pauseTrack, resumeTrack, stopTrack, startPolygonDraw, cancelPolygonDraw, fitVisible });
+defineExpose({ playTrack, pauseTrack, resumeTrack, stopTrack, startPolygonDraw, beginPolygonDraw, cancelPolygonDraw, fitVisible });
 
-watch(() => [props.points, props.track, props.regions, props.fences, props.riskPoints, props.displayLayer, props.mode, props.groupBy], () => { if (state.value === 'ready') scheduleRender(); }, { deep: true });
+watch(() => [props.points, props.track, props.regions, props.fences, props.riskPoints, props.displayLayer, props.mode, props.groupBy], () => {
+  if (state.value !== 'ready') return;
+  scheduleRender();
+  void installDeferredFeatures();
+}, { deep: true });
 watch(() => [props.selectedId, state.value], ([id, mapState], previous) => {
-  if (!id || mapState !== 'ready' || !map.value) return;
+  if (!id || mapState !== 'ready' || disposed || !map.value || !hasMapSize()) return;
   if (previous && previous[0] === id && previous[1] === mapState) return;
+  if(props.monitoring)scheduleRender();
   const point = props.points.find((item) => item.id === id);
-  if (!point?.realtimeStatus) return;
-  map.value.setZoomAndCenter(Math.max(map.value.getZoom?.() ?? 12, 15), [point.realtimeStatus.longitude, point.realtimeStatus.latitude], true);
-  nextTick(() => selectPoint(point));
-});
-onMounted(() => { window.addEventListener('error', handleMapError); console.error = handleConsoleError; init(); }); onUnmounted(() => { window.removeEventListener('error', handleMapError); resizeObserver?.disconnect(); resizeObserver = null; if (renderFrame) cancelAnimationFrame(renderFrame); if (console.error === handleConsoleError) console.error = originalConsoleError; mouseTool.value?.off?.('draw', handleFenceDraw); mouseTool.value?.close?.(true); mouseTool.value = null; map.value?.off?.('complete', handleMapComplete); map.value?.off?.('zoomend', handleZoomEnd); clearBusinessLayers(); map.value?.destroy(); map.value = null; AMapRef.value = null; });
+  if (!point?.realtimeStatus||props.monitoring&&point.health?.locationValid===false) return;
+  const zoom = Number(map.value.getZoom?.());
+  map.value.setZoomAndCenter(Number.isFinite(zoom) ? Math.max(zoom, 15) : 15, [point.realtimeStatus.longitude, point.realtimeStatus.latitude], true);
+  if(!props.monitoring)nextTick(() => selectPoint(point));
+}, { flush: 'post' });
+onMounted(() => { window.addEventListener('error', handleMapError); console.error = handleConsoleError; init(); }); onBeforeUnmount(() => { cancelReplay();cancelPolygonDraw(); disposed = true; generation++; if (resizeFrame) cancelAnimationFrame(resizeFrame); window.removeEventListener('error', handleMapError); resizeObserver?.disconnect(); resizeObserver = null; if (renderFrame) cancelAnimationFrame(renderFrame); if (console.error === handleConsoleError) console.error = originalConsoleError; mouseTool.value?.off?.('draw', handleFenceDraw); mouseTool.value?.close?.(true); mouseTool.value = null; map.value?.off?.('complete', handleMapComplete); map.value?.off?.('zoomend', handleZoomEnd); clearBusinessLayers(); map.value?.destroy(); map.value = null; AMapRef.value = null; controlsInstalled = false; });
 </script>
 
 <template>
-  <div class="operations-map" :class="{ compact: Number.parseInt(height, 10) > 0 && Number.parseInt(height, 10) <= 360, 'compact-map-labels': mode === 'dashboard' }" :style="{ height }" :data-map-state="state">
+  <div class="operations-map" :class="{ compact: Number.parseInt(height, 10) > 0 && Number.parseInt(height, 10) <= 360, 'compact-map-labels': mode === 'dashboard' }" :style="{ height }" :data-map-state="state" :data-map-complete="mapComplete">
     <div ref="container" class="operations-map-canvas" :aria-busy="state === 'loading'" aria-label="车辆运行高德地图"></div>
     <div v-if="state === 'loading'" class="map-cover" role="status" aria-live="polite"><MapPinned :size="22"/><strong>正在加载高德地图</strong><span>同步业务图层与车辆状态…</span></div>
     <div v-else-if="state === 'error'" class="map-cover map-error" role="alert"><AlertTriangle :size="22"/><strong>地图暂时无法加载</strong><span>{{ message }}</span><el-button :icon="RefreshCw" @click="init">重试</el-button></div>
     <div v-if="authWarning" class="map-auth-warning"><AlertTriangle :size="14"/><span>底图域名未获高德 Key 授权，请在控制台加入当前开发域名</span></div>
     <div v-if="state === 'ready' && !['trajectory', 'fences', 'risk'].includes(mode)" class="map-legend" aria-label="地图图例">
-      <template v-if="mode === 'dashboard'">
+      <template v-if="monitoring"><span><i style="background:#3268f6"></i>运行中</span><span><i style="background:#18b985"></i>在线临停</span><span><i style="background:#98a6ba"></i>离线最后位置</span><span><i style="background:#efa222"></i>异常关注</span><span v-if="regions.length"><i style="background:#3268f6"></i>许可通行范围</span></template><template v-else-if="mode === 'regions'"><span><i style="background:#3268f6"></i>许可通行范围</span></template>
+      <template v-else-if="mode === 'dashboard'">
         <span><i class="running"></i>运行</span>
         <span><i class="online"></i>待机</span>
         <span><i class="offline"></i>离线</span>
@@ -413,7 +524,7 @@ onMounted(() => { window.addEventListener('error', handleMapError); console.erro
         <span><i class="offline"></i>离线</span>
       </template>
     </div>
-    <div v-if="state === 'ready' && mode === 'fences'" class="map-legend fence-legend" aria-label="围栏图例"><span><i class="no-entry"></i>禁行区</span><span><i class="speed-limit"></i>限速区</span><span><i class="operation"></i>运营区</span><span><i class="temporary"></i>临时管制</span></div>
+    <div v-if="state === 'ready' && mode === 'fences'" class="map-legend fence-legend" aria-label="围栏图例"><span><i class="no-entry"></i>禁行区</span><span><i class="speed-limit"></i>限速区</span><span v-if="regions.length"><i class="operation"></i>通行区域参考</span><span><i class="temporary"></i>临时管制</span></div>
     <div v-if="state === 'ready' && mode === 'risk'" class="map-legend risk-legend" aria-label="风险图例"><span><i class="risk-low"></i>低密度</span><span><i class="risk-high"></i>高密度</span><span><i class="risk-accident"></i>事故点</span></div>
     <div v-if="state === 'ready'" class="map-source">高德地图 · 业务数据 {{ mode === 'fences' ? fences.length : mode === 'regions' ? regions.length : mode === 'trajectory' ? track.length : mode === 'risk' ? riskPoints.length : points.length }} 条</div>
   </div>
@@ -439,4 +550,5 @@ onMounted(() => { window.addEventListener('error', handleMapError); console.erro
 @keyframes operation-marker-pulse{0%{box-shadow:0 0 0 0 rgba(217,45,32,.42)}70%{box-shadow:0 0 0 8px rgba(217,45,32,0)}100%{box-shadow:0 0 0 0 rgba(217,45,32,0)}}
 @media(prefers-reduced-motion:reduce){:global(.operation-marker.round.pulse .operation-marker-dot){animation:none}}
 @media(max-width:900px){.operations-map:not(.compact){height:440px!important}.map-legend{gap:7px;flex-wrap:wrap;right:12px}.map-source{display:none}}
+:global(.monitor-map-car){transform:none!important;width:30px;height:30px;justify-content:center;background:transparent!important;border:0!important;box-shadow:none!important;position:relative}:global(.monitor-map-car .operation-marker-dot){display:grid;place-items:center;width:28px;height:28px;border:2px solid #fff;border-radius:50%;background:var(--marker-color);color:#fff;box-shadow:0 1px 5px #30405a30}:global(.monitor-map-car .operation-marker-label){display:none}:global(.monitor-map-car.selected .operation-marker-label){display:block;position:absolute;bottom:39px;left:50%;transform:translateX(-50%);padding:5px 8px;border:1px solid #dce6f5;border-radius:4px;background:white;white-space:nowrap;color:#31517c;font-size:11px}:global(.monitor-map-car.selected .operation-marker-dot){box-shadow:0 0 0 8px #3268f626}:global(.monitor-map-car.has-anomaly:not(.selected) .operation-marker-dot){outline:3px solid #efa22270}
 </style>

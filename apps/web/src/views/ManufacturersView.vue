@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import QueryPanel from '../components/QueryPanel.vue';
+import QueryField from '../components/QueryField.vue';
+import ListPanel from '../components/ListPanel.vue';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { MoreHorizontal, Plus, RefreshCw, Search } from 'lucide-vue-next';
+import { MoreHorizontal, Plus, Search } from 'lucide-vue-next';
 import { api } from '../api';
 import PageHeader from '../components/PageHeader.vue';
 import { useSessionStore } from '../stores/session';
@@ -13,12 +16,12 @@ const rows = ref<any[]>([]), total = ref(0), loading = ref(false), error = ref('
 const selected = ref<any[]>([]), q = ref(String(route.query.q ?? '')), status = ref(String(route.query.status ?? ''));
 const sort = ref(String(route.query.sort ?? 'updatedAt')), page = ref(Number(route.query.page ?? 1)), pageSize = 20;
 const dialog = ref(false), saving = ref(false), editingId = ref('');
-const canWrite = computed(() => session.user?.permissions.includes('archive:manufacturer:write'));
+const canWrite = computed(() => session.user?.accountLevel === 'PROVINCE' && session.user?.permissions.includes('archive:manufacturer:write'));
 const form = reactive({ businessNo: '', name: '', shortName: '', creditCode: '', contactName: '', contactPhone: '', address: '' });
 let timer: number | undefined;
 
 function syncUrl() {
-  router.replace({ query: { ...(q.value ? { q: q.value } : {}), ...(status.value ? { status: status.value } : {}), ...(sort.value !== 'updatedAt' ? { sort: sort.value } : {}), ...(page.value > 1 ? { page: String(page.value) } : {}) } });
+  router.replace({ query: { ...route.query, q: q.value || undefined, status: status.value || undefined, sort: sort.value !== 'updatedAt' ? sort.value : undefined, page: page.value > 1 ? String(page.value) : undefined } });
 }
 async function load() {
   loading.value = true; error.value = '';
@@ -64,20 +67,24 @@ function command(row: any, action: string) {
   if (action === 'disable') setStatus([row], 'INACTIVE');
   if (action === 'delete') remove([row]);
 }
+
+function resetQueryFilters() {
+  q.value = '';
+  status.value = '';
+  page.value = 1;
+  load();
+}
 </script>
 
 <template>
-  <PageHeader title="厂商管理" description="维护无人配送车辆生产厂商及联系人信息。" :count="total">
-    <el-button :icon="RefreshCw" @click="load">刷新</el-button>
-    <el-button v-if="canWrite" type="primary" :icon="Plus" @click="openForm()">新增厂商</el-button>
-  </PageHeader>
-  <div class="table-toolbar">
-    <el-input v-model="q" :prefix-icon="Search" clearable placeholder="搜索名称、编号或信用代码" aria-label="搜索厂商" />
-    <el-select v-model="status" clearable placeholder="全部状态" aria-label="厂商状态"><el-option label="正常" value="ACTIVE" /><el-option label="停用" value="INACTIVE" /></el-select>
-    <el-select v-model="sort" aria-label="排序方式"><el-option label="最近更新" value="updatedAt" /><el-option label="名称排序" value="name" /><el-option label="最近创建" value="createdAt" /></el-select>
-    <el-button v-if="q || status" text @click="q='';status=''">清除筛选</el-button>
-  </div>
-  <div v-if="selected.length && canWrite" class="bulk-bar"><strong>已选 {{ selected.length }} 项</strong><el-button size="small" @click="setStatus(selected,'ACTIVE')">启用</el-button><el-button size="small" @click="setStatus(selected,'INACTIVE')">停用</el-button><el-button size="small" type="danger" plain @click="remove(selected)">删除</el-button><el-button size="small" text @click="selected=[]">取消选择</el-button></div>
+  <PageHeader title="厂商管理" description="维护无人配送车辆生产厂商及联系人信息。" :count="total" />
+  <QueryPanel :loading="loading" @search="load" @reset="resetQueryFilters">
+<QueryField label="关键词" keyword><el-input v-model="q" :prefix-icon="Search" clearable placeholder="搜索名称、编号或信用代码" aria-label="搜索厂商" /></QueryField>
+<QueryField label="厂商状态"><el-select v-model="status" clearable placeholder="全部状态" aria-label="厂商状态"><el-option label="正常" value="ACTIVE" /><el-option label="停用" value="INACTIVE" /></el-select></QueryField>
+</QueryPanel>
+<ListPanel title="厂商管理列表" :total="error ? undefined : (total)">
+<template #actions><el-select v-model="sort" aria-label="排序方式"><el-option label="最近更新" value="updatedAt" /><el-option label="名称排序" value="name" /><el-option label="最近创建" value="createdAt" /></el-select><el-button v-if="canWrite" type="primary" :icon="Plus" @click="openForm()">新增厂商</el-button></template>
+<div v-if="selected.length && canWrite" class="bulk-bar"><strong>已选 {{ selected.length }} 项</strong><el-button size="small" @click="setStatus(selected,'ACTIVE')">启用</el-button><el-button size="small" @click="setStatus(selected,'INACTIVE')">停用</el-button><el-button size="small" type="danger" plain @click="remove(selected)">删除</el-button><el-button size="small" text @click="selected=[]">取消选择</el-button></div>
   <div v-if="error" class="error-state"><strong>厂商列表暂时无法加载</strong><span>{{ error }}</span><el-button @click="load">重试</el-button></div>
   <el-table v-else v-loading="loading" :data="rows" row-key="id" empty-text="暂无符合条件的厂商" @selection-change="selected=$event">
     <el-table-column v-if="canWrite" type="selection" width="46" />
@@ -90,7 +97,9 @@ function command(row: any, action: string) {
   </el-table>
   <div class="pagination-row"><span>当前显示 {{rows.length}} / {{total}}</span><el-pagination v-model:current-page="page" :page-size="pageSize" :total="total" layout="prev, pager, next" /></div>
 
-  <el-dialog v-model="dialog" :title="editingId?'编辑厂商':'新增厂商'" width="620px" destroy-on-close>
+
+</ListPanel>
+<el-dialog v-model="dialog" :title="editingId?'编辑厂商':'新增厂商'" width="620px" destroy-on-close>
     <p class="dialog-note">厂商编号和全称用于监管档案关联，保存后仍可修订。</p>
     <div class="form-grid">
       <el-form-item label="厂商编号" required><el-input v-model="form.businessNo" placeholder="MFR-005" /></el-form-item>

@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import QueryPanel from '../components/QueryPanel.vue';
+import QueryField from '../components/QueryField.vue';
+import ListPanel from '../components/ListPanel.vue';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { KeyRound, MoreHorizontal, Plus, RefreshCw, Search, UserRound } from 'lucide-vue-next';
+import { KeyRound, MoreHorizontal, Plus, Search, UserRound } from 'lucide-vue-next';
 import { api } from '../api';
 import PageHeader from '../components/PageHeader.vue';
 import { useSessionStore } from '../stores/session';
@@ -163,23 +166,28 @@ function command(row: AccountRow, action: string) {
   if (action === 'enable') setStatus([row], 'ACTIVE');
   if (action === 'disable') setStatus([row], 'INACTIVE');
 }
+
+function resetQueryFilters() {
+  q.value = '';
+  status.value = '';
+  page.value = 1;
+  load();
+}
 </script>
 
 <template>
   <section ref="root" class="accounts-page">
-    <PageHeader title="账号管理" description="管理本企业登录账号、岗位角色和启用状态。停用后立即无法登录。" :count="total">
-      <el-button :icon="RefreshCw" :loading="loading" @click="load">刷新</el-button>
-      <el-button v-if="canCreate" type="primary" :icon="Plus" @click="openCreate">新增账号</el-button>
-    </PageHeader>
-    <div class="table-toolbar">
-      <el-input v-model="q" :prefix-icon="Search" clearable placeholder="搜索账号、姓名、邮箱或手机" aria-label="搜索账号" />
-      <el-select v-model="status" clearable placeholder="全部状态" aria-label="账号状态">
+    <PageHeader title="账号管理" description="管理本企业登录账号、岗位角色和启用状态。停用后立即无法登录。" :count="total" />
+    <QueryPanel :loading="loading" @search="load" @reset="resetQueryFilters">
+<QueryField label="关键词" keyword><el-input v-model="q" :prefix-icon="Search" clearable placeholder="搜索账号、姓名、邮箱或手机" aria-label="搜索账号" /></QueryField>
+<QueryField label="账号状态"><el-select v-model="status" clearable placeholder="全部状态" aria-label="账号状态">
         <el-option label="正常" value="ACTIVE" />
         <el-option label="停用" value="INACTIVE" />
-      </el-select>
-      <el-button v-if="filtered" text @click="clearFilters">清除筛选</el-button>
-    </div>
-    <div v-if="selected.length && canUpdate" class="bulk-bar">
+      </el-select></QueryField>
+</QueryPanel>
+<ListPanel title="企业账号列表" :total="error ? undefined : (total)">
+<template #actions><el-button v-if="canCreate" type="primary" :icon="Plus" @click="openCreate">新增账号</el-button></template>
+<div v-if="selected.length && canUpdate" class="bulk-bar">
       <strong>已选择 {{ selected.length }} 项</strong>
       <el-button size="small" @click="bulkStatus('ACTIVE')">启用</el-button>
       <el-button size="small" @click="bulkStatus('INACTIVE')">停用</el-button>
@@ -253,7 +261,9 @@ function command(row: AccountRow, action: string) {
       </div>
       <div class="pagination-row"><span>当前显示 {{ rows.length }} / {{ total }}</span><el-pagination v-model:current-page="page" layout="prev, pager, next" :total="total" :page-size="20" /></div>
     </div>
-    <el-dialog v-model="dialog" :title="editingId ? '编辑账号' : '新增账号'" width="520" destroy-on-close>
+
+</ListPanel>
+<el-dialog v-model="dialog" :title="editingId ? '编辑账号' : '新增账号'" width="520" destroy-on-close>
       <p class="dialog-note">账号归属当前企业，不能改到其他企业或监管端。</p>
       <el-form label-position="top">
         <div class="form-grid">

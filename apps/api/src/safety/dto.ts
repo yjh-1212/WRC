@@ -1,8 +1,9 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 
 export class SafetyQueryDto {
+  @IsOptional() @IsString() workspaceId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() q?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() organizationId?: string;
@@ -41,12 +42,12 @@ export class AlertActionDto {
 export class CreateFenceDto {
   @ApiProperty() @IsString() @IsNotEmpty() businessNo!: string;
   @ApiProperty() @IsString() @IsNotEmpty() name!: string;
-  @ApiProperty() @IsIn(['NO_ENTRY', 'SPEED_LIMIT', 'OPERATION', 'TEMPORARY']) fenceType!: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string;
+  @ApiProperty() @IsIn(['NO_ENTRY', 'SPEED_LIMIT', 'TEMPORARY']) fenceType!: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() enterpriseId?: string | null;
   @ApiProperty() @IsString() @IsNotEmpty() organizationId!: string;
   @ApiProperty({ type: [CoordinateDto] }) @IsArray() @ArrayMinSize(3) @ArrayMaxSize(200) @ValidateNested({ each: true }) @Type(() => CoordinateDto) polygon!: CoordinateDto[];
   @ApiProperty() @IsDateString() validFrom!: string;
-  @ApiPropertyOptional() @IsOptional() @IsDateString() validTo?: string;
+  @ApiPropertyOptional() @IsOptional() @IsDateString() validTo?: string | null;
   @ApiPropertyOptional() @IsOptional() @Type(() => Boolean) active?: boolean;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(80) speedLimit?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() allowedHours?: string;
@@ -57,6 +58,17 @@ export class CreateFenceDto {
 export class UpdateFenceDto extends PartialType(CreateFenceDto) {}
 export class FenceStatusDto { @ApiProperty() @IsBoolean() active!: boolean; }
 
+export class AccidentVideoDto {
+  @IsString() @IsNotEmpty() @MaxLength(120) name!: string;
+  @IsIn(['FRONT', 'BACK', 'LEFT', 'RIGHT', 'SIDE', 'UNKNOWN']) channel!: string;
+  @IsString() @MaxLength(2000) url!: string;
+  @IsDateString() @Matches(/T.*(?:Z|[+-]\d{2}:\d{2})$/) startedAt!: string;
+  @IsDateString() @Matches(/T.*(?:Z|[+-]\d{2}:\d{2})$/) endedAt!: string;
+  @IsOptional() @IsString() @MaxLength(120) source?: string;
+}
+export class SubmitAccidentVideosDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => AccidentVideoDto) videos!: AccidentVideoDto[];
+}
 export class CreateAccidentDto {
   @ApiProperty() @IsString() @IsNotEmpty() vehicleId!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() operationRecordId?: string;
@@ -71,6 +83,7 @@ export class CreateAccidentDto {
   @ApiProperty() @IsDateString() occurredAt!: string;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(999) casualties?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() damageDescription?: string;
+  @ApiPropertyOptional() @IsOptional() @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => AccidentVideoDto) videos?: AccidentVideoDto[];
 }
 
 export class AccidentActionDto {

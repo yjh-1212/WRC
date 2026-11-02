@@ -1,0 +1,11 @@
+{
+  "tool": "Built-in image_gen",
+  "createdDate": "2026-10-30",
+  "files": {
+    "01-event-handling.png": "exec-5c9a638b-546c-414c-a3d3-8ac2a8f5424c.png",
+    "02-emergency-rectification.png": "exec-f9039056-cb33-4ef1-a990-10ac8993d6d5.png",
+    "03-supervision-inspections.png": "exec-7bbdd1ed-de2d-40c5-9560-9ecac60a01b7.png"
+  },
+  "promptFiles": ["prompts.json", "refinements.json", "timeline-correction.txt"],
+  "scope": "Static visual designs only; no application source changes in this design task."
+}

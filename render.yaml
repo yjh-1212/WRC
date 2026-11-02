@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     region: virginia
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm db:generate && pnpm --filter api build && pnpm --filter web build && mkdir -p data && pnpm db:deploy && pnpm db:seed
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm db:generate && pnpm --filter api build && pnpm --filter web build && pnpm db:deploy && node tools/verify-deployment-data.cjs
     startCommand: node apps/api/dist/main.js
     healthCheckPath: /api/health
     autoDeployTrigger: commit

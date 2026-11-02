@@ -2,12 +2,12 @@
 import { nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
 import { isAmapConfigured, loadAMap } from '../amap';
 import { attachVehicleModel } from '../cockpitVehicleLayer';
+import { loadShandongGeometry, restrictToShandong } from '../cockpit/shandong-map';
 
 export type CockpitMapItem = {
   id: string; name: string; count?: number; online?: number; running?: number;
   longitude?: number; latitude?: number; businessNo?: string; onlineStatus?: string;
   drivingState?: string; battery?: number | null; speed?: number; enterprise?: string;
-  hasOrder?: boolean;
   polygon?: Array<{ longitude: number; latitude: number }>;
 };
 export type CockpitTrackPoint = { longitude: number; latitude: number; recordedAt: string; speed: number; heading?: number };
@@ -33,6 +33,7 @@ let modelLayer: { remove: () => void } | null = null;
 let modelToken = 0;
 let lastSceneKey = '';
 let aimedVehicle = '';
+let removeShandongConstraint: (() => void) | undefined;
 
 function sceneKey() {
   const track = props.track ?? [];
@@ -49,7 +50,7 @@ function sceneKey() {
 }
 
 function colorFor(item: CockpitMapItem) {
-  if (item.hasOrder || item.drivingState === 'RUNNING') return '#17d6ff';
+  if (item.drivingState === 'RUNNING') return '#17d6ff';
   if (item.onlineStatus === 'ONLINE' || (item.online ?? 0) > 0) return '#ffb340';
   return '#6b8094';
 }
@@ -187,7 +188,7 @@ function render() {
     if (selected) {
       const token = ++modelToken;
       modelState.value = 'loading';
-      const running = Boolean(selected.hasOrder || selected.drivingState === 'RUNNING');
+      const running = selected.onlineStatus === 'ONLINE' && selected.drivingState === 'RUNNING';
       const trackSamples = (props.track ?? []).map((point) => ({
         longitude: point.longitude,
         latitude: point.latitude,
@@ -244,13 +245,13 @@ async function init() {
   if (!isAmapConfigured()) { state.value = 'error'; message.value = '地图配置缺失，请配置高德 Web 端 Key。'; return; }
   state.value = 'loading';
   try {
-    const AMap = await loadAMap();
+    const [AMap, shandong] = await Promise.all([loadAMap(['AMap.Scale', 'AMap.ToolBar']), loadShandongGeometry()]);
     await nextTick();
     if (!container.value) return;
     AMapRef.value = AMap;
     map.value = new AMap.Map(container.value, {
       viewMode: '3D',
-      center: [120.15, 30.28],
+      center: [117.000923, 36.675807],
       zoom: 10,
       pitch: 28,
       rotation: 0,
@@ -261,6 +262,7 @@ async function init() {
       rotateEnable: false,
       showLabel: true,
     });
+    removeShandongConstraint = restrictToShandong(map.value, shandong);
     map.value.addControl(new AMap.Scale());
     map.value.addControl(new AMap.ToolBar({ position: { right: '12px', bottom: '24px' } }));
     map.value.on('complete', () => {
@@ -286,6 +288,7 @@ watch(() => [props.kind, props.selectedId, props.trip?.endName, props.items.map(
 onMounted(init);
 onUnmounted(() => {
   resizeObserver?.disconnect();
+  removeShandongConstraint?.();
   clear();
   map.value?.destroy?.();
 });

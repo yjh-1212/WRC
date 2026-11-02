@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { AuthUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { CockpitQueryDto } from './cockpit.dto';
+import { currentVehicleTrack } from './current-vehicle-track';
 
 const STALE_MS = 10 * 60_000;
 const LOW_BATTERY = 25;
@@ -11,7 +12,7 @@ const LOW_BATTERY = 25;
 export class CockpitService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private isSuper(user: AuthUser) { return user.roles.some((role) => role.code === 'SUPER_ADMIN'); }
+  private isSuper(user: AuthUser) { return user.accountLevel === 'PROVINCE' || (!!user.workspaceId && user.accountLevel !== 'OPERATIONS') || (!user.accountLevel && user.roles.some((role) => role.code === 'SUPER_ADMIN')); }
   private organizationRelation(user: AuthUser) {
     return { is: { OR: [{ id: user.organizationId ?? '__none__' }, { parentId: user.organizationId ?? '__none__' }] } };
   }
@@ -21,16 +22,16 @@ export class CockpitService {
   private startOfDay(offset = 0) {
     const date = new Date(); date.setHours(0, 0, 0, 0); date.setDate(date.getDate() + offset); return date;
   }
-  private dateKey(value: Date) { return value.toISOString().slice(0, 10); }
+  private dateKey(value: Date) { return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`; }
   private round(value: number, digits = 1) { const power = 10 ** digits; return Math.round(value * power) / power; }
   private assertRegulator(user: AuthUser) {
     if (user.portal !== 'REGULATORY') throw new ForbiddenException('企业账号不能进入监管驾驶舱');
   }
 
-  async overview(user: AuthUser, query: CockpitQueryDto) {
+  async overview(user: AuthUser, query: CockpitQueryDto, provinceScope?: { organizationIds: string[]; cityOrganizationId: string }) {
     this.assertRegulator(user);
-    const scoped = this.vehicleWhere(user);
-    const canCity = this.isSuper(user);
+    const scoped: Prisma.VehicleWhereInput = provinceScope ? { AND: [this.vehicleWhere(user), { organizationId: { in: provinceScope.organizationIds } }] } : this.vehicleWhere(user);
+    const canCity = user.accountLevel === 'PROVINCE' || (!!user.workspace && user.organizationId === user.workspace.organizationId) || (!user.accountLevel && this.isSuper(user));
     let requestedLevel = query.level ?? (canCity ? 'city' : 'district');
     let organizationId = query.organizationId || undefined;
     if (!canCity) {
@@ -42,7 +43,11 @@ export class CockpitService {
     const mapMode = query.mapMode ?? 'situation';
 
     const where: Prisma.VehicleWhereInput = { ...scoped };
-    if (organizationId) where.organizationId = organizationId;
+    if (query.vehicleType && query.vehicleType !== 'ALL') where.vehicleType = query.vehicleType;
+    if (organizationId) {
+      if (provinceScope && !provinceScope.organizationIds.includes(organizationId)) throw new ForbiddenException('区县不在当前地市范围');
+      where.organizationId = organizationId === user.organizationId && user.scopeOrganizationIds?.length ? { in: user.scopeOrganizationIds } : organizationId;
+    }
     if (enterpriseId) where.enterpriseId = enterpriseId;
     if (vehicleId) where.id = vehicleId;
 
@@ -50,7 +55,7 @@ export class CockpitService {
       this.prisma.vehicle.findMany({
         where,
         select: {
-          id: true, name: true, businessNo: true, onlineStatus: true, enterpriseId: true, organizationId: true,
+          id: true, name: true, businessNo: true, vehicleType: true, onlineStatus: true, enterpriseId: true, organizationId: true,
           enterprise: { select: { id: true, name: true } },
           organization: { select: { id: true, name: true } },
           realtimeStatus: { select: { longitude: true, latitude: true, speed: true, battery: true, drivingState: true, heading: true, heartbeatAt: true, mileageToday: true, locationTime: true } },
@@ -58,8 +63,8 @@ export class CockpitService {
         },
       }),
       organizationId ? this.prisma.organization.findFirst({ where: { id: organizationId, ...(this.isSuper(user) ? {} : { OR: [{ id: user.organizationId ?? '__none__' }, { parentId: user.organizationId ?? '__none__' }] }) }, select: { id: true, name: true } }) : null,
-      enterpriseId ? this.prisma.enterprise.findFirst({ where: { id: enterpriseId, ...(this.isSuper(user) ? {} : { organization: this.organizationRelation(user) }) }, select: { id: true, name: true, organizationId: true } }) : null,
-      vehicleId ? this.prisma.vehicle.findFirst({ where: { id: vehicleId, ...scoped }, select: { id: true, name: true, businessNo: true, enterpriseId: true, organizationId: true } }) : null,
+      enterpriseId ? this.prisma.enterprise.findFirst({ where: { id: enterpriseId, ...(provinceScope ? { organizationId: { in: provinceScope.organizationIds } } : {}), ...(this.isSuper(user) ? {} : { organization: this.organizationRelation(user) }) }, select: { id: true, name: true, organizationId: true } }) : null,
+      vehicleId ? this.prisma.vehicle.findFirst({ where: { id: vehicleId, ...scoped, ...(provinceScope && organizationId ? { organizationId } : {}), ...(provinceScope && enterpriseId ? { enterpriseId } : {}) }, select: { id: true, name: true, businessNo: true, enterpriseId: true, organizationId: true } }) : null,
       this.prisma.vehicleOnlineDaily.findMany({
         where: { vehicle: where, metricDate: { gte: this.startOfDay(-6) } },
         select: { metricDate: true, onlineRate: true },
@@ -67,14 +72,16 @@ export class CockpitService {
       this.prisma.operationRegion.findMany({
         where: {
           status: 'ACTIVE',
+          ...(provinceScope ? { AND: [{ organizationId: { in: provinceScope.organizationIds } }] } : {}),
           ...(this.isSuper(user) ? {} : { organization: this.organizationRelation(user) }),
           ...(organizationId ? { organizationId } : {}),
-          ...(enterpriseId ? { enterpriseId } : {}),
+          ...(enterpriseId ? { OR: [{ enterpriseId }, { enterpriseId: null, vehicles: { some: { vehicle: { enterpriseId } } } }] } : {}),
+          ...(vehicleId ? { vehicles: { some: { vehicleId } } } : {}),
         },
         select: { id: true, name: true, polygonJson: true, enterpriseId: true, organizationId: true },
       }),
       this.prisma.organization.findFirst({
-        where: { parentId: null },
+        where: provinceScope ? { id: provinceScope.cityOrganizationId } : user.workspace ? { id: user.workspace.organizationId } : { code: '370000' },
         orderBy: { createdAt: 'asc' },
         select: { id: true, name: true },
       }),
@@ -82,16 +89,11 @@ export class CockpitService {
 
     if (organizationId && !org) throw new ForbiddenException('区县不在当前数据范围');
     if (enterpriseId && !enterprise) throw new ForbiddenException('企业不在当前数据范围');
-    if (vehicleId && !vehicleRow) throw new NotFoundException('车辆不在当前数据范围');
+    if (provinceScope && enterprise && organizationId && enterprise.organizationId !== organizationId) throw new ForbiddenException('企业不在当前区县范围');
+    if (vehicleId && (!vehicleRow || !vehicles.some(row => row.id === vehicleId))) throw new NotFoundException('车辆不在当前数据范围');
 
     const level = vehicleRow ? 'vehicle' : enterprise ? 'enterprise' : org && requestedLevel !== 'city' ? 'district' : 'city';
     const located = vehicles.filter((item) => Number.isFinite(item.realtimeStatus?.longitude) && Number.isFinite(item.realtimeStatus?.latitude));
-    const orderRows = await this.prisma.deliveryOrder.findMany({
-      where: { status: { in: ['DISPATCHED', 'IN_TRANSIT'] } },
-      distinct: ['vehicleId'],
-      select: { vehicleId: true },
-    }).catch(() => [] as Array<{ vehicleId: string }>);
-    const orderVehicleIds = new Set(orderRows.map((row) => row.vehicleId));
     const online = vehicles.filter((item) => item.onlineStatus === 'ONLINE');
     const running = vehicles.filter((item) => item.onlineStatus === 'ONLINE' && item.realtimeStatus?.drivingState === 'RUNNING');
     const standby = vehicles.filter((item) => item.onlineStatus === 'ONLINE' && item.realtimeStatus?.drivingState !== 'RUNNING');
@@ -108,52 +110,40 @@ export class CockpitService {
 
     const distribution = this.distribution(level, vehicles, located);
     const enterpriseRank = this.enterpriseRank(vehicles);
-    const focusTargets = await this.focusTargets(user, vehicles.map((v) => v.organizationId));
-    const riskSnapshot = await this.riskSnapshot(user, vehicles.map((v) => v.organizationId));
-    const map = this.mapPayload(level, mapMode, located, regionRows, vehicleRow?.id, orderVehicleIds);
+    const [focusTargets, riskSnapshot] = await Promise.all([
+      provinceScope ? { enterprises: [], vehicles: [] } : this.focusTargets(user, vehicles.map((v) => v.organizationId)),
+      this.riskSnapshot(user, vehicles.map((v) => v.organizationId), vehicles.map(v => v.id)),
+    ]);
+    const map = this.mapPayload(level, mapMode, located, regionRows, vehicleRow?.id);
     let track: Array<{ longitude: number; latitude: number; recordedAt: Date; speed: number; heading?: number }> = [];
-    let currentOrder: Record<string, unknown> | null = null;
+    let historyTrack: { startName: string; endName: string; startedAt: Date; endedAt: Date | null } | null = null;
+    let latestOperation: Record<string, unknown> | null = null;
     let trip: Record<string, unknown> | null = null;
+    let currentTrack: Awaited<ReturnType<typeof currentVehicleTrack>> = { track: [], trip: null };
     if (level === 'vehicle' && vehicleRow) {
-      const [record, orders] = await Promise.all([
+      const reporting = vehicles.find(row => row.id === vehicleRow.id);
+      const [record, activeTrack, latest] = await Promise.all([
         this.prisma.operationRecord.findFirst({
           where: { vehicleId: vehicleRow.id, trackPoints: { some: {} } },
           orderBy: { startedAt: 'desc' },
           select: {
-            startAddress: true, endAddress: true, mileage: true, durationMinutes: true, status: true,
+            startAddress: true, endAddress: true, startedAt: true, endedAt: true, mileage: true, durationMinutes: true, status: true,
             trackPoints: { orderBy: { sequence: 'asc' }, select: { longitude: true, latitude: true, recordedAt: true, speed: true, heading: true } },
           },
         }),
-        this.prisma.deliveryOrder.findMany({
-          where: { vehicleId: vehicleRow.id, status: { in: ['DISPATCHED', 'IN_TRANSIT'] } },
-          orderBy: { dispatchedAt: 'desc' },
-          take: 1,
-          select: {
-            businessNo: true, status: true, cargoType: true, cargoWeight: true,
-            startName: true, startAddress: true, endName: true, endAddress: true,
-            startLng: true, startLat: true, endLng: true, endLat: true,
-            progressPct: true, etaMinutes: true, dispatchedAt: true, startedAt: true,
-          },
-        }).catch(() => []),
+        reporting?.onlineStatus === 'ONLINE' && reporting.realtimeStatus?.drivingState === 'RUNNING' ? currentVehicleTrack(this.prisma, vehicleRow.id) : { track: [], trip: null },
+        this.prisma.operationRecord.findFirst({ where: { vehicleId: vehicleRow.id }, orderBy: { startedAt: 'desc' }, select: { startedAt: true, endedAt: true, mileage: true, durationMinutes: true, status: true } }),
       ]);
+      currentTrack = activeTrack;
       const rawTrack = record?.trackPoints ?? [];
+      if (record && rawTrack.length) historyTrack = { startName: record.startAddress ?? '历史轨迹起点', endName: record.endAddress ?? '历史轨迹终点', startedAt: record.startedAt, endedAt: record.endedAt };
       if (rawTrack.length <= 320) track = rawTrack;
       else {
         const step = (rawTrack.length - 1) / 319;
         track = Array.from({ length: 320 }, (_, index) => rawTrack[Math.round(index * step)]);
       }
-      const order = orders[0];
-      if (order) {
-        currentOrder = {
-          businessNo: order.businessNo, status: order.status, cargoType: order.cargoType, cargoWeight: order.cargoWeight,
-          startName: order.startName, startAddress: order.startAddress, endName: order.endName, endAddress: order.endAddress,
-          progressPct: order.progressPct, etaMinutes: order.etaMinutes, dispatchedAt: order.dispatchedAt, startedAt: order.startedAt,
-        };
-        trip = {
-          startName: order.startName, endName: order.endName,
-          startLng: order.startLng, startLat: order.startLat, endLng: order.endLng, endLat: order.endLat,
-        };
-      } else if (track.length) {
+      if (latest) latestOperation = latest;
+      if (track.length) {
         const first = track[0];
         const last = track[track.length - 1];
         trip = {
@@ -179,6 +169,11 @@ export class CockpitService {
     const vehicle = level === 'vehicle' ? vehicles[0] : null;
     return {
       updatedAt: new Date(),
+      level, connected: true, cityCode: user.workspace?.cityCode ?? null,
+      cityName: user.workspace?.cityName ?? this.shortOrgName(cityOrg?.name ?? '当前监管范围'),
+      vehicles: located.map(row => ({ id: row.id, name: row.name, businessNo: row.businessNo, vehicleType: row.vehicleType, organizationId: row.organizationId, enterpriseId: row.enterpriseId,
+        enterprise: row.enterprise.name, organization: row.organization.name, onlineStatus: row.onlineStatus, openAlerts: row._count.safetyAlerts, ...row.realtimeStatus })),
+      vehicleTypes: vehicles.reduce((types, vehicle) => { types[vehicle.vehicleType] = (types[vehicle.vehicleType] ?? 0) + 1; return types; }, {} as Record<string, number>),
       hasTrend,
       mapModes: [
         { id: 'situation', label: '综合态势' },
@@ -204,6 +199,7 @@ export class CockpitService {
         enterprises,
         mileageToday,
         regions: regionRows.length,
+        dataQualityRate: vehicles.length ? this.round(located.length / vehicles.length * 100) : 0,
         districts: level === 'city' ? new Set(vehicles.map((item) => item.organizationId)).size : undefined,
       },
       trend: hasTrend ? trend : [],
@@ -217,7 +213,7 @@ export class CockpitService {
       focusItems,
       focusTargets,
       riskSnapshot,
-      map: { ...map, track },
+      map: { ...map, track, currentTrack: currentTrack.track, operationRegions: regionRows.map(row => ({ id: row.id, name: row.name, polygon: this.parsePolygon(row.polygonJson) })) },
       context: vehicle ? {
         businessNo: vehicle.businessNo, name: vehicle.name, enterprise: vehicle.enterprise.name,
         organization: vehicle.organization.name, onlineStatus: vehicle.onlineStatus,
@@ -227,7 +223,7 @@ export class CockpitService {
         longitude: vehicle.realtimeStatus?.longitude ?? null, latitude: vehicle.realtimeStatus?.latitude ?? null,
         heartbeatAt: vehicle.realtimeStatus?.heartbeatAt ?? null, locationTime: vehicle.realtimeStatus?.locationTime ?? null,
         mileageToday: vehicle.realtimeStatus?.mileageToday ?? 0,
-        currentOrder, trip,
+        latestOperation, trip, historyTrack, currentTrip: currentTrack.trip,
       } : {
         districts: level === 'city' ? new Set(vehicles.map((item) => item.organizationId)).size : undefined,
         enterprises, registered: vehicles.length, online: online.length, running: running.length, offline: offline.length, regions: regionRows.length,
@@ -239,26 +235,11 @@ export class CockpitService {
     try { return JSON.parse(value) as Array<{ longitude: number; latitude: number }>; } catch { return []; }
   }
 
-  /** "余杭区交通运输局" → "余杭区"，"杭州市交通运输局" → "杭州市" */
+  /** Remove the department suffix while keeping the actual jurisdiction name. */
   private shortOrgName(name: string) {
     const m = name.match(/^(.+?[市区县镇乡])/);
     return m ? m[1] : name;
   }
-
-  /** 杭州各区已知中心坐标（GCJ-02），city 级别 marker 定位专用。
-   *  不在此表中的组织（如市本级）不在地图上单独显示，避免与区级 marker 重叠。 */
-  private static DISTRICT_CENTERS: Record<string, { longitude: number; latitude: number }> = {
-    '余杭区': { longitude: 120.165, latitude: 30.430 },
-    '西湖区': { longitude: 119.960, latitude: 30.248 },
-    '上城区': { longitude: 120.155, latitude: 30.232 },
-    '拱墅区': { longitude: 120.083, latitude: 30.358 },
-    '滨江区': { longitude: 120.215, latitude: 30.183 },
-    '萧山区': { longitude: 120.350, latitude: 30.150 },
-    '钱塘区': { longitude: 120.430, latitude: 30.311 },
-    '临平区': { longitude: 120.385, latitude: 30.419 },
-    '富阳区': { longitude: 119.960, latitude: 30.049 },
-    '临安区': { longitude: 119.724, latitude: 30.232 },
-  };
 
   private centroid(items: Array<{ realtimeStatus: { longitude: number; latitude: number } | null }>) {
     const pts = items.filter((item) => item.realtimeStatus);
@@ -316,23 +297,23 @@ export class CockpitService {
   private mapPayload(
     level: string,
     mapMode: string,
-    located: Array<{ id: string; name: string; businessNo: string; onlineStatus: string; enterpriseId: string; organizationId: string; enterprise: { id: string; name: string }; organization: { id: string; name: string }; realtimeStatus: { longitude: number; latitude: number; drivingState: string; battery: number; speed: number } | null }>,
+    located: Array<{ id: string; name: string; businessNo: string; onlineStatus: string; enterpriseId: string; organizationId: string; enterprise: { id: string; name: string }; organization: { id: string; name: string }; realtimeStatus: { longitude: number; latitude: number; drivingState: string; battery: number; speed: number; heading: number; heartbeatAt: Date } | null }>,
     regions: Array<{ id: string; name: string; polygonJson: string }>,
     selectedVehicleId?: string,
-    orderVehicleIds: Set<string> = new Set(),
   ) {
     if (mapMode === 'regions') {
       const items = regions.map((item) => ({ id: item.id, name: item.name, polygon: this.parsePolygon(item.polygonJson) })).filter((item) => item.polygon.length >= 3);
       return { kind: 'regions' as const, items };
     }
-    if (mapMode === 'vehicles' && (level === 'enterprise' || level === 'vehicle')) {
+    if (mapMode === 'vehicles') {
       return {
         kind: 'vehicles' as const,
         items: located.filter((item) => level !== 'vehicle' || item.id === selectedVehicleId).map((item) => ({
           id: item.id, name: item.name, businessNo: item.businessNo, onlineStatus: item.onlineStatus,
           drivingState: item.realtimeStatus?.drivingState ?? 'OFFLINE', battery: item.realtimeStatus?.battery ?? null,
           speed: item.realtimeStatus?.speed ?? 0, longitude: item.realtimeStatus!.longitude, latitude: item.realtimeStatus!.latitude,
-          enterprise: item.enterprise.name, hasOrder: orderVehicleIds.has(item.id),
+          enterprise: item.enterprise.name,
+          heading: item.realtimeStatus?.heading ?? null, heartbeatAt: item.realtimeStatus?.heartbeatAt ?? null,
         })),
       };
     }
@@ -346,7 +327,8 @@ export class CockpitService {
             id: item.id, name: item.name, businessNo: item.businessNo, onlineStatus: item.onlineStatus,
             drivingState: item.realtimeStatus?.drivingState ?? 'OFFLINE', battery: item.realtimeStatus?.battery ?? null,
             speed: item.realtimeStatus?.speed ?? 0, longitude: item.realtimeStatus!.longitude, latitude: item.realtimeStatus!.latitude,
-            enterprise: item.enterprise.name, hasOrder: orderVehicleIds.has(item.id),
+            enterprise: item.enterprise.name,
+            heading: item.realtimeStatus?.heading ?? null, heartbeatAt: item.realtimeStatus?.heartbeatAt ?? null,
           })),
         };
       }
@@ -360,10 +342,9 @@ export class CockpitService {
         kind: 'districts' as const,
         items: [...groups.entries()].map(([id, list]) => {
           const shortName = this.shortOrgName(list[0].organization.name);
-          // 仅输出有已知区中心坐标的组织，市本级（杭州市）不在此表中，跳过避免重叠
-          const center = CockpitService.DISTRICT_CENTERS[shortName];
+          const center = this.centroid(list);
           if (!center) return null;
-          return { id, name: shortName, count: list.length, online: list.filter((item) => item.onlineStatus === 'ONLINE').length, running: list.filter((item) => item.realtimeStatus?.drivingState === 'RUNNING').length, ...center };
+          return { id, name: shortName, count: list.length, online: list.filter((item) => item.onlineStatus === 'ONLINE').length, running: list.filter((item) => item.realtimeStatus?.drivingState === 'RUNNING').length, heartbeatAt: list.map(v => v.realtimeStatus?.heartbeatAt).filter(Boolean).sort((a, b) => b!.getTime() - a!.getTime())[0] ?? null, ...center };
         }).filter((item): item is NonNullable<typeof item> => Boolean(item)),
       };
     }
@@ -375,7 +356,7 @@ export class CockpitService {
       kind: 'enterprises' as const,
       items: [...groups.entries()].map(([id, list]) => {
         const center = this.centroid(list); if (!center) return null;
-        return { id, name: list[0].enterprise.name, count: list.length, online: list.filter((item) => item.onlineStatus === 'ONLINE').length, running: list.filter((item) => item.realtimeStatus?.drivingState === 'RUNNING').length, ...center };
+        return { id, name: list[0].enterprise.name, count: list.length, online: list.filter((item) => item.onlineStatus === 'ONLINE').length, running: list.filter((item) => item.realtimeStatus?.drivingState === 'RUNNING').length, heartbeatAt: list.map(v => v.realtimeStatus?.heartbeatAt).filter(Boolean).sort((a, b) => b!.getTime() - a!.getTime())[0] ?? null, ...center };
       }).filter((item): item is NonNullable<typeof item> => Boolean(item)),
     };
   }
@@ -441,17 +422,19 @@ export class CockpitService {
   }
 
   /** 当前风险态势快照：6个真实指标 */
-  private async riskSnapshot(user: AuthUser, orgIds: string[]) {
-    const orgWhere = this.isSuper(user) ? {} : { organizationId: { in: [...new Set(orgIds)] } };
+  private async riskSnapshot(user: AuthUser, orgIds: string[], vehicleIds: string[]) {
+    const orgWhere = { ...(this.isSuper(user) ? {} : { organizationId: { in: [...new Set(orgIds)] } }), vehicleId: { in: vehicleIds } };
     const today = this.startOfDay();
-    const [alertToday, alertHigh, alertUnhandled, accidents, violations, offlineAbnormal] = await Promise.all([
+    const [alertToday, alertHigh, alertUnhandled, accidents, violations, offlineAbnormal, majorAlerts, majorAccidents] = await Promise.all([
       this.prisma.safetyAlert.count({ where: { ...orgWhere, occurredAt: { gte: today } } }),
-      this.prisma.safetyAlert.count({ where: { ...orgWhere, level: 'HIGH', status: { in: ['PENDING_CONFIRMATION', 'PROCESSING'] } } }),
+      this.prisma.safetyAlert.count({ where: { ...orgWhere, level: { in: ['HIGH', 'CRITICAL'] }, status: { in: ['PENDING_CONFIRMATION', 'PROCESSING'] } } }),
       this.prisma.safetyAlert.count({ where: { ...orgWhere, status: { in: ['PENDING_CONFIRMATION', 'PROCESSING'] } } }),
       this.prisma.accident.count({ where: { ...orgWhere, occurredAt: { gte: today } } }),
       this.prisma.violation.count({ where: { ...orgWhere, status: { in: ['UNHANDLED', 'PROCESSING'] } } }),
       this.prisma.offlineEvent.count({ where: { ...orgWhere, endedAt: null } }),
+      this.prisma.safetyAlert.count({ where: { ...orgWhere, occurredAt: { gte: today }, level: { in: ['HIGH', 'CRITICAL'] } } }),
+      this.prisma.accident.count({ where: { ...orgWhere, occurredAt: { gte: today }, level: { in: ['MAJOR', 'SERIOUS'] } } }),
     ]);
-    return { alertToday, alertHigh, alertUnhandled, accidents, violations, offlineAbnormal };
+    return { alertToday, alertHigh, alertUnhandled, accidents, violations, offlineAbnormal, majorToday: majorAlerts + majorAccidents };
   }
 }

@@ -4,15 +4,18 @@ import { CurrentUser, RequirePermissions } from '../auth/auth.decorators';
 import { AuthUser } from '../auth/auth.types';
 import { CreateOperationRegionDto, OperationsQueryDto, TelemetryDto, TrackQueryDto, UpdateOperationRegionDto, UpdateOperationRegionStatusDto } from './dto';
 import { OperationsService } from './operations.service';
+import { MonitoringService } from './monitoring.service';
 
 @ApiTags('运行监管') @ApiBearerAuth() @Controller('operations')
 export class OperationsController {
-  constructor(private operations: OperationsService) {}
+  constructor(private operations: OperationsService,private monitoring:MonitoringService) {}
 
   @Get('options') @RequirePermissions('operation:realtime:read')
   options(@CurrentUser() user: AuthUser) { return this.operations.options(user); }
   @Get('realtime') @RequirePermissions('operation:realtime:read')
   realtime(@CurrentUser() user: AuthUser, @Query() query: OperationsQueryDto) { return this.operations.realtime(user, query); }
+  @Get('monitoring/:vehicleId') @RequirePermissions('operation:realtime:read')
+  monitoredVehicle(@CurrentUser() user:AuthUser,@Param('vehicleId') vehicleId:string){return this.monitoring.detail(user,vehicleId)}
   @Get('distribution') @RequirePermissions('operation:distribution:read')
   distribution(@CurrentUser() user: AuthUser, @Query() query: OperationsQueryDto) { return this.operations.distribution(user, query); }
   @Get('online-monitor') @RequirePermissions('operation:monitor:read')
@@ -27,6 +30,10 @@ export class OperationsController {
   ingest(@CurrentUser() user: AuthUser, @Body() dto: TelemetryDto) { return this.operations.ingest(user, dto); }
   @Get('regions') @RequirePermissions('operation:region:read')
   regions(@CurrentUser() user: AuthUser, @Query() query: OperationsQueryDto) { return this.operations.regions(user, query); }
+  @Get('regions/options') @RequirePermissions('operation:region:read')
+  regionOptions(@CurrentUser() user:AuthUser){return this.operations.regionOptions(user);}
+  @Get('regions/:id') @RequirePermissions('operation:region:read')
+  region(@CurrentUser() user:AuthUser,@Param('id') id:string){return this.operations.region(user,id);}
   @Post('regions') @RequirePermissions('operation:region:write')
   createRegion(@CurrentUser() user: AuthUser, @Body() dto: CreateOperationRegionDto) { return this.operations.createRegion(user, dto); }
   @Patch('regions/:id') @RequirePermissions('operation:region:write')

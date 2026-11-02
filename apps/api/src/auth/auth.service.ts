@@ -5,6 +5,7 @@ import { createHash, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChangePasswordDto, LoginDto } from './dto';
 import { AuthUser } from './auth.types';
+import { navigationFor } from './navigation';
 
 @Injectable()
 export class AuthService {
@@ -13,8 +14,9 @@ export class AuthService {
   private hashToken(token: string) { return createHash('sha256').update(token).digest('hex'); }
   private async issue(userId: string) {
     await this.prisma.refreshToken.deleteMany({ where: { userId, OR: [{ expiresAt: { lt: new Date() } }, { revokedAt: { not: null } }] } });
-    const accessToken = await this.jwt.signAsync({ sub: userId, typ: 'access' }, { secret: process.env.JWT_ACCESS_SECRET, expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN ?? '15m') as any });
-    const refreshToken = await this.jwt.signAsync({ sub: userId, typ: 'refresh', nonce: randomUUID() }, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN ?? '7d') as any });
+    const member = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { authVersion: true } });
+    const accessToken = await this.jwt.signAsync({ sub: userId, typ: 'access', ver: member.authVersion }, { secret: process.env.JWT_ACCESS_SECRET, expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN ?? '15m') as any });
+    const refreshToken = await this.jwt.signAsync({ sub: userId, typ: 'refresh', ver: member.authVersion, nonce: randomUUID() }, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN ?? '7d') as any });
     const decoded = this.jwt.decode(refreshToken) as { exp: number };
     await this.prisma.refreshToken.create({ data: { tokenHash: this.hashToken(refreshToken), userId, expiresAt: new Date(decoded.exp * 1000) } });
     const accessPayload = this.jwt.decode(accessToken) as { exp: number; iat: number };
@@ -32,6 +34,7 @@ export class AuthService {
     const success = !!user && user.status === 'ACTIVE' && await bcrypt.compare(dto.password, user.passwordHash);
     await this.prisma.loginLog.create({ data: { userId: success ? user!.id : null, username: dto.username, ip, userAgent, success, message: success ? '登录成功' : '账号、密码或状态无效' } });
     if (!success) throw new UnauthorizedException('账号或密码错误');
+    if (!['PROVINCE', 'OPERATIONS'].includes(user!.accountLevel) && !user!.workspaceId) throw new UnauthorizedException('账号所属城市尚未开通，请联系管理员');
     await this.prisma.user.update({ where: { id: user!.id }, data: { lastLoginAt: new Date() } });
     return this.issue(user!.id);
   }
@@ -41,7 +44,7 @@ export class AuthService {
     try { payload = await this.jwt.verifyAsync(token, { secret: process.env.JWT_REFRESH_SECRET }); }
     catch { throw new UnauthorizedException('刷新凭证无效或已过期'); }
     const stored = await this.prisma.refreshToken.findUnique({ where: { tokenHash: this.hashToken(token) }, include: { user: true } });
-    if (!stored || stored.revokedAt || stored.expiresAt < new Date() || stored.user.status !== 'ACTIVE' || payload.typ !== 'refresh' || stored.userId !== payload.sub) throw new UnauthorizedException('刷新凭证无效或已过期');
+    if (!stored || stored.revokedAt || stored.expiresAt < new Date() || stored.user.status !== 'ACTIVE' || payload.typ !== 'refresh' || stored.userId !== payload.sub || ((payload as any).ver ?? 0) !== stored.user.authVersion) throw new UnauthorizedException('刷新凭证无效或已过期');
     await this.prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
     return this.issue(payload.sub);
   }
@@ -54,11 +57,7 @@ export class AuthService {
 
   profile(user: AuthUser) { return user; }
 
-  async menus(user: AuthUser) {
-    const menus = await this.prisma.menu.findMany({ where: { portal: user.portal, status: 'ACTIVE' }, orderBy: { orderNo: 'asc' } });
-    const visible = menus.filter((m) => !m.permissionCode || user.permissions.includes(m.permissionCode));
-    return visible.filter((m) => !m.parentId).map((m) => ({ ...m, children: visible.filter((c) => c.parentId === m.id) }));
-  }
+  async menus(user: AuthUser): Promise<any[]> { return navigationFor(user); }
 
   async changePassword(user: AuthUser, dto: ChangePasswordDto) {
     const current = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id } });
